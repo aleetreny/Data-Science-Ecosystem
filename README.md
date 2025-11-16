@@ -16,7 +16,3 @@ This repository documents my journey in applied data science, showcasing hands-o
 ## Technologies
 
 Python • R • SQL • Jupyter Notebooks • Git • LaTeX
-
----
-
-**Last Updated:** November 2025
