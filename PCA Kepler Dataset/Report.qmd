@@ -1,7 +1,7 @@
 ---
 title: "Dimensionality Reduction: Principal Component Analysis of the Kepler KOI Dataset"
 subtitle: "PCA on astronomical data"
-author: "Alejandro Treny Ortega & Ignacio Ortiz Serratosa"
+author: "Alejandro Treny Ortega"
 date: "`r Sys.Date()`"
 prefer-html: true
 format: 
@@ -896,3 +896,4 @@ Key libraries used:
 **Created:** `r Sys.Date()`
 
 **Analysis Purpose:** Dimensionality reduction and interpretation of exoplanet discovery data using Principal Component Analysis with full methodological validation.
+
