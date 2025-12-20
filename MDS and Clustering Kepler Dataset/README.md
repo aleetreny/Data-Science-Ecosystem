@@ -20,7 +20,7 @@ To handle the heterogeneous nature of the data, specific distances are applied t
 The project implements the **RelMS** algorithm to:
 * Ensure **commensurability** by scaling matrices based on geometric variability ($V_k$).
 * Remove **redundancy** between data sources using a cross-product correction term in the Gram matrix construction.
-* Apply **Theorem 2 (Constant Shift)** to ensure the resulting distance matrix is Euclidean for MDS projection.
+* Apply **Constant Shift** to ensure the resulting distance matrix is Euclidean for MDS projection.
 
 ### 3. Clustering Logic
 * **Tendency:** Validated via the **Hopkins Statistic** and **VAT (Visual Assessment of Tendency)**.
