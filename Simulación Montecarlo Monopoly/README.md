@@ -1,43 +1,44 @@
-#  Análisis Estadístico y Estratégico del Monopoly (Ed. Madrid)
+# Statistical and Strategic Analysis of Monopoly (Madrid Ed.)
 
-> Un estudio de probabilidad y economía del juego utilizando simulaciones de Monte Carlo en R.
+> A study of game probability and economics using Monte Carlo simulations in R.
 
 ![R](https://img.shields.io/badge/R-4.0%2B-blue)
 ![Tidyverse](https://img.shields.io/badge/Main_Lib-Tidyverse-orange)
-![Status](https://img.shields.io/badge/Status-Completado-green)
+![Status](https://img.shields.io/badge/Status-Completed-green)
 
-##  Sobre el Proyecto
+## About the Project
 
-Este proyecto utiliza la ciencia de datos para analizar las mecánicas subyacentes del Monopoly (Edición Clásica Madrid).
+This project uses data science to analyze the underlying mechanics of Monopoly (Classic Madrid Edition).
 
-A través de R, he modelado las reglas físicas y económicas del juego para simular **2.000.000 de tiradas**. El objetivo no es solo calcular probabilidades, sino entender la eficiencia del capital y desarrollar una estrategia ganadora basada en datos objetivos, respondiendo a preguntas como: ¿Qué calles son las más rentables? ¿Cuántas casas debo construir para maximizar el retorno?
+Using R, I have modeled the physical and economic rules of the game to simulate **2,000,000 rolls**. The goal is not just to calculate probabilities, but to understand capital efficiency and develop a data-driven winning strategy, answering questions such as: Which streets are the most profitable? How many houses should I build to maximize return?
 
-##  Conclusiones Principales
+## Key Findings
 
-Los datos arrojados por la simulación revelan patrones claros:
+The data yielded by the simulation reveals clear patterns:
 
-1.  **El Dominio del Naranja:** Debido a la alta frecuencia de salida desde la Cárcel, el grupo Naranja (Felipe II, Velázquez, Serrano) es estadísticamente la zona más visitada del tablero. Ofrece la mejor relación coste-beneficio.
-2.  **La Estrategia de las 3 Casas:** El análisis de ROI indica que la tercera casa representa el punto óptimo de inversión. A partir de ahí, el retorno marginal disminuye y el riesgo de iliquidez aumenta.
-3.  **Velocidad vs. Fuerza:** Aunque el grupo Verde cobra alquileres más altos, el Naranja provoca bancarrotas más rápido debido a su frecuencia de impacto. En una partida competitiva, la velocidad de retorno es clave.
+1.  **The Orange Dominance:** Due to the high frequency of exiting Jail, the Orange group (Felipe II, Velázquez, Serrano) is statistically the most visited zone on the board. It offers the best cost-benefit ratio.
+2.  **The 3-House Strategy:** ROI analysis indicates that the third house represents the investment "sweet spot." Beyond this point, the marginal return decreases while the risk of illiquidity increases.
+3.  **Speed vs. Strength:** Although the Green group collects higher rents, the Orange group causes bankruptcies faster due to its hit frequency. In a competitive match, the speed of return is key.
 
-##  Visualizaciones Generadas
+## Generated Visualizations
 
-El script `Monopoly.R` genera una serie de gráficos para visualizar estos hallazgos:
+The `Monopoly.R` script generates a series of plots to visualize these findings:
 
-* **Heatmap de Frecuencia:** Probabilidad de caída por casilla.
-* **Curva de Rentabilidad:** Análisis de *break-even* según el número de casas (1-4 y Hotel).
-* **Matriz de Eficiencia:** Comparativa de Inversión vs. Retorno Esperado.
-* **Perfil de Riesgo:** Clasificación de propiedades por Frecuencia vs. Daño (Impacto).
-* **Curva de Supervivencia:** Simulación de cuántos turnos aguantan los rivales contra cada estrategia.
-* **Skyline del Tablero:** Representación visual del valor económico de cada calle.
+*   **Frequency Heatmap:** Landing probability per tile.
+*   **Profitability Curve:** Break-even analysis based on the number of houses (1-4 and Hotel).
+*   **Efficiency Matrix:** Investment vs. Expected Return comparison.
+*   **Risk Profile:** Classification of properties by Frequency vs. Damage (Impact).
+*   **Survival Curve:** Simulation of how many turns opponents survive against each strategy.
+*   **Board Skyline:** Visual representation of the economic value of each street.
 
-##  Requisitos Técnicos
+## Technical Requirements
 
-El proyecto está desarrollado en **R**. Necesitarás tener instalados los siguientes paquetes:
+The project is developed in **R**. You will need the following packages installed:
 
-* `tidyverse` (para manipulación de datos y gráficos con ggplot2).
-* `parallel` (opcional, si deseas paralelizar la simulación).
+*   `tidyverse` (for data manipulation and plotting with ggplot2).
+*   `parallel` (optional, if you wish to parallelize the simulation).
 
-Instalación rápida:
+Quick installation:
 ```r
 install.packages("tidyverse")
+```
