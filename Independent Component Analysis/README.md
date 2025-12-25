@@ -22,7 +22,7 @@ The first project implements a straightforward, loop-based approach to discover 
 - **Fisher Index Optimization**: Evaluates each projection direction by:
   - Projecting whitened data onto the direction vector
   - Clustering projected 1D data into two groups using k-means
-  - Computing the Fisher Index: \(FI = \frac{(\mu_1 - \mu_2)^2}{\sigma_1^2 + \sigma_2^2}\)
+  - Computing the Fisher Index: $FI = \frac{(\mu_1 - \mu_2)^2}{\sigma_1^2 + \sigma_2^2}$
 - **Orthogonal Component Discovery**: Sequentially finds IC2 (orthogonal to IC1) and IC3 (orthogonal to both IC1 and IC2)
 - **Visualization**: Generates histograms, segmentation masks, grayscale projections, and 3D optimization surfaces
 
@@ -140,17 +140,17 @@ par(mfrow = c(1, 1))
 
 ### Data Whitening
 
-Whitening transforms centered data \(X\) such that the resulting matrix \(Z\) has an identity covariance matrix:
+Whitening transforms centered data $X$ such that the resulting matrix $Z$ has an identity covariance matrix:
 
-\[Z = (X - \mu) \cdot W\]
+$$Z = (X - \mu) \cdot W$$
 
-where \(W = E \cdot D^{-1/2}\), with \(E\) being the eigenvectors and \(D\) the eigenvalues of \(\text{Cov}(X)\).
+where $W = E \cdot D^{-1/2}$, with $E$ being the eigenvectors and $D$ the eigenvalues of $\text{Cov}(X)$.
 
 ### Fisher Index
 
-For a 1D projection \(p = Z \cdot v\) clustered into two groups, the Fisher Index measures class separability:
+For a 1D projection $p = Z \cdot v$ clustered into two groups, the Fisher Index measures class separability:
 
-\[FI = \frac{(\bar{p}_1 - \bar{p}_2)^2}{\sigma_1^2 + \sigma_2^2 + \epsilon}\]
+$$FI = \frac{(\bar{p}_1 - \bar{p}_2)^2}{\sigma_1^2 + \sigma_2^2 + \epsilon}$$
 
 Higher values indicate better separation between clusters.
 
@@ -160,15 +160,15 @@ Projection directions in 3D are parameterized using spherical coordinates:
 
 - **Azimuthal angle (θ)**: 0° to 360°
 - **Polar angle (φ)**: 0° to 180°
-- **Unit vector**: \(v(\theta, \phi) = [\cos(\theta)\sin(\phi), \sin(\theta)\sin(\phi), \cos(\phi)]\)
+- **Unit vector**: $v(\theta, \phi) = [\cos(\theta)\sin(\phi), \sin(\theta)\sin(\phi), \cos(\phi)]$
 
 ### Orthogonal Constraints
 
 After finding IC1, IC2 is constrained to lie on the circle orthogonal to IC1:
 
-\[v = \cos(\alpha) \cdot v_1 + \sin(\alpha) \cdot v_2\]
+$$v = \cos(\alpha) \cdot v_1 + \sin(\alpha) \cdot v_2$$
 
-where \(v_1, v_2\) form an orthonormal basis for the plane perpendicular to IC1.
+where $v_1, v_2$ form an orthonormal basis for the plane perpendicular to IC1.
 
 ---
 
@@ -310,11 +310,11 @@ Binary masks show the result of k-means clustering on each projection, where pix
 
 ### Parallelization Efficiency
 
-With \(p\) cores, the IC1 search speedup is approximately:
+With $p$ cores, the IC1 search speedup is approximately:
 
-\[\text{Speedup} \approx p \times (1 - f)\]
+$$\text{Speedup} \approx p \times (1 - f)$$
 
-where \(f\) is the fraction of non-parallelizable code (typically 5-10%).
+where $f$ is the fraction of non-parallelizable code (typically 5-10%).
 
 ---
 
@@ -393,7 +393,3 @@ This project is provided as-is for educational purposes. Feel free to modify and
 - Results can vary slightly due to k-means random initialization; set seeds for reproducibility
 - For optimal segmentation quality, consider tuning k-means parameters via the `nstart_kmeans` and `niter_kmeans` arguments
 - Ensure the image file is in the same directory as your R scripts, or provide the full path to the image
-
----
-
-**Last Updated**: November 2025
