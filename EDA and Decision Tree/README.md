@@ -10,32 +10,6 @@ This repository contains a comprehensive data science project analyzing student 
 
 ---
 
-## Recommended File Organization
-
-### Folder Naming Suggestion
-```
-📁 Student-Performance-Analysis/
-```
-
-### File Naming Convention
-
-| Original Name | Recommended Name | Description |
-|---------------|-----------------|-------------|
-| `student-mat.csv` | `student_data.csv` | Dataset with 395 student records |
-| `Code.R` | `analysis.R` | Complete R script for both EDA and modeling |
-| `Student_Performance.Rmd` | `report.Rmd` | R Markdown source for PDF report |
-| `Student_Performance.pdf` | `Student_Performance_Report.pdf` | Final comprehensive report |
-| `S4DSassignment2025.pdf` | *(excluded)* | Original assignment specifications (not included in folder) |
-| `README.md` | `README.md` | This documentation file |
-
-**Rationale for renaming:**
-- Use underscores instead of spaces for consistency with coding standards
-- More descriptive filenames for clarity (e.g., `analysis.R` instead of `Code.R`)
-- Consistent formatting across all project files
-- Maintain the PDF report name as is for final deliverable clarity
-
----
-
 ## Project Structure
 
 ```
