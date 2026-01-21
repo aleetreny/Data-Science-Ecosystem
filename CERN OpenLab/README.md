@@ -41,7 +41,7 @@ The High-Luminosity LHC (HL-LHC) upgrade presents a dual challenge: a massive in
 **Goal:** Efficiently calculate scattering cross-sections.
 * **Problem:** The "Curse of Dimensionality" makes uniform Monte Carlo integration inefficient for complex matrix elements.
 * **Solution:** Utilized **Bijective Normalizing Flows** (Affine Coupling Layers) to learn the exact topology of the multi-modal phase space, creating a perfect proposal distribution for importance sampling.
-* **Impact:** Drastic reduction in variance ($\sim$24,500x) and successful recovery of narrow signal resonances missed by baseline methods.
+* **Impact:** Drastic reduction in variance (**~24,500x**) and successful recovery of narrow signal resonances missed by baseline methods.
 
 ### 3. The Tracking Challenge (Quantum)
 **Goal:** Disentangle particle trajectories in the HL-LHC inner tracker.
