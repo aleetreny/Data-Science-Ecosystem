@@ -5,7 +5,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![PyTorch](https://img.shields.io/badge/PyTorch-Deep_Learning-orange) ![QML](https://img.shields.io/badge/Quantum-PennyLane-purple) ![FPGA](https://img.shields.io/badge/Hardware-Vivado_HLS-green)
 
-## 📌 Executive Summary
+## Executive Summary
 
 This repository aggregates three technical projects developed to demonstrate technical competency for the **CERN OpenLab Summer Student Programme**. 
 
@@ -17,19 +17,19 @@ The High-Luminosity LHC (HL-LHC) upgrade presents a dual challenge: a massive in
 
 ---
 
-## 📂 Project Overview
+## Project Overview
 
 | Project Scope | Title & Link | Technology Stack | Key Achievement |
 | :--- | :--- | :--- | :--- |
-| **L1 Trigger** | [**The Silicon Neuron: Extreme-Scale Anomaly Detection on FPGAs**](./01_fpga_trigger) | TensorFlow, Vivado HLS, Custom Quantization | Achieved **< 1 $\mu s$ latency** using a custom 6-bit quantization engine on FPGA architecture. |
-| **Reconstruction** | [**Hybrid Quantum Graph Neural Networks for Particle Tracking**](./02_quantum_tracking) | PyTorch Geometric, PennyLane, QNN | Applied **Quantum GNNs** to solve the combinatorial tracking problem in high pile-up environments ($\mu \approx 200$). |
-| **Simulation** | [**Accelerating Phase Space Integration via Normalizing Flows**](./03_simulation_flows) | PyTorch, Bijective Flows, Monte Carlo | Reduced statistical error by **orders of magnitude** using Neural Importance Sampling to learn phase space topology. |
+| **L1 Trigger** | [**The Silicon Neuron**](./Extreme-Scale%20Anomaly%20Detection) | TensorFlow, Vivado HLS | Achieved **< 1 $\mu s$ latency** using a custom 6-bit quantization engine on FPGA. |
+| **Reconstruction** | [**Hybrid Quantum GNNs**](./Quantum%20GNN%20Tracking) | PyTorch Geometric, PennyLane | Applied **Quantum GNNs** to solve combinatorial tracking in high pile-up ($\mu \approx 200$). |
+| **Simulation** | [**Neural Importance Sampling**](./Neural%20Phase%20Integration) | PyTorch, Bijective Flows | Reduced statistical error by **orders of magnitude** using Normalizing Flows. |
 
 > *Please navigate to the sub-folders linked above for the full source code (Jupyter Notebooks) and detailed technical documentation for each project.*
 
 ---
 
-## 🔬 Technical Deep Dive
+## Technical Deep Dive
 
 ### 1. The Trigger Challenge (Hardware)
 **Goal:** Detect New Physics in the Level-1 Trigger within strict microsecond latency budgets.
@@ -51,7 +51,7 @@ The High-Luminosity LHC (HL-LHC) upgrade presents a dual challenge: a massive in
 
 ---
 
-## 🛠️ Installation & Reproduction
+## Installation & Reproduction
 
 Each sub-directory contains its own `README.md` and `notebook.ipynb` with specific instructions. However, the general environment requirements across all projects include:
 
@@ -60,8 +60,3 @@ Each sub-directory contains its own `README.md` and `notebook.ipynb` with specif
 * **Deep Learning:** `torch`, `tensorflow`, `torch_geometric`
 * **Quantum:** `pennylane`
 * **Hardware (Optional):** Xilinx Vivado HLS (for synthesis of Project 1)
-
-## 📬 Contact & Application Info
-
-**Author:** Alejandro Treny Ortega
-**Context:** Application for CERN OpenLab Summer Student Programme
