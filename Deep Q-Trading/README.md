@@ -1,7 +1,5 @@
 # Deep Q-Trading: Algorithmic Speculation via Reinforcement Learning
 
-**Author:** Alejandro Treny Ortega
-
 ## Overview
 
 This project explores the application of **Deep Reinforcement Learning (DRL)** to financial markets, specifically Bitcoin (BTC/USD) trading. Unlike traditional algorithmic trading strategies that rely on hard-coded heuristics (e.g., "buy if RSI < 30"), this project trains an autonomous agent to discover its own optimal strategy solely through trial and error.
@@ -54,10 +52,7 @@ The model was evaluated against the standard market benchmark: the **Buy & Hold*
 2.  **Regime Adaptation:** The agent maintained profitability during the 2022 market crash, demonstrating that it learned to profit from downward trends (Shorting) rather than just riding upward momentum.
 3.  **Active Management:** The buy/sell ratio (approx. 50/50) indicates the agent did not degenerate into a trivial "Always Buy" policy, but actively managed its exposure.
 
-## Reproducibility
-
-This project enforces strict seeding for scientific reproducibility.
-* **Seed:** `2024`
-* **Libraries:** `PyTorch`, `Gym-Anytrading`, `Pandas-TA`.
-
 *Note: Due to floating-point arithmetic differences between CPU and GPU architectures, exact profit figures may vary slightly across different hardware, but the general performance trend is consistent.*
+
+**Author:** Alejandro Treny Ortega
+
