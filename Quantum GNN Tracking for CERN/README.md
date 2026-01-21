@@ -4,7 +4,7 @@
 
 ## 1. Project Context: The HL-LHC Data Challenge
 
-The High-Luminosity Large Hadron Collider (HL-LHC) will operate with an average pile-up of $<\mu> \approx 200$, generating approximately 10,000 charged particles per bunch crossing. This density creates a combinatorial explosion in trajectory reconstruction, where traditional algorithms like the Kalman Filter scale quadratically or worse.
+The High-Luminosity Large Hadron Collider (HL-LHC) will operate with an average pile-up of $\langle \mu \rangle \approx 200$, generating approximately 10,000 charged particles per bunch crossing. This density creates a combinatorial explosion in trajectory reconstruction, where traditional algorithms like the Kalman Filter scale quadratically or worse.
 
 This project investigates **Quantum Machine Learning (QML)** as a potential solution. We implement a **Hybrid Quantum-Classical Graph Neural Network (QGNN)** that treats particle tracking as an edge-classification task, leveraging the high-dimensional expressibility of quantum circuits to identify true particle trajectories within a noisy detector environment.
 
