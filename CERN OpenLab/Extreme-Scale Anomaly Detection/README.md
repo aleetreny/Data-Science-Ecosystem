@@ -60,7 +60,7 @@ The move from 32-bit Floating Point to 6-bit Integer resulted in a **5.3x memory
 
 ------------------------------------------------------------------------
 
-## Future Roadmap (CERN OpenLab)
+## Future Roadmap (CERN)
 
 If integrated into the CERN computing infrastructure, the following steps are proposed: 1. **Hardware-in-the-Loop:** Synthesize the C++ firmware on a physical **Xilinx Virtex UltraScale+** to measure nanosecond-level latency and power draw. 2. **Pruning:** Implement unstructured pruning to reduce DSP usage by an estimated 40%. 3. **Graph Neural Networks:** Adapt the quantization engine for GNNs to better capture the non-Euclidean geometry of particle detectors.
 
@@ -68,4 +68,4 @@ If integrated into the CERN computing infrastructure, the following steps are pr
 
 ## Author
 
-**Alejandro Treny Ortega** \* Candidate for CERN OpenLab Summer Student Programme
+**Alejandro Treny Ortega**
