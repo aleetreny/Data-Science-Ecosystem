@@ -80,4 +80,3 @@ To achieve quantum advantage in future iterations:
 ---
 
 **Author:** Alejandro Treny 
-**Application:** CERN OpenLab Summer Student Programme
