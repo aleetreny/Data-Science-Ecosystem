@@ -3,7 +3,7 @@
 **Candidate:** Alejandro Treny Ortega
 **Focus:** Advanced Computing Architectures for the High-Luminosity LHC (HL-LHC)
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![PyTorch](https://img.shields.io/badge/PyTorch-Deep_Learning-orange) ![QML](https://img.shields.io/badge/Quantum-PennyLane-purple) ![FPGA](https://img.shields.io/badge/Hardware-Vivado_HLS-green)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 
 ## Summary
 
