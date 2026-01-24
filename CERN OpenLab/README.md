@@ -1,4 +1,4 @@
-# CERN OpenLab Summer Student Programme Portfolio
+# CERN Technical Application Portfolio
 
 **Candidate:** Alejandro Treny Ortega
 **Focus:** Advanced Computing Architectures for the High-Luminosity LHC (HL-LHC)
@@ -7,7 +7,7 @@
 
 ## Summary
 
-This repository aggregates three technical projects developed to demonstrate technical competency for the **CERN OpenLab Summer Student Programme**. 
+This repository aggregates technical projects developed to demonstrate technical competency for **CERN’s Student Programmes (including the Summer Student and OpenLab tracks).**
 
 The High-Luminosity LHC (HL-LHC) upgrade presents a dual challenge: a massive increase in data rates (1 Petabyte/s) and a combinatorial explosion in complexity. These projects address three specific bottlenecks of the HL-LHC computing model—**Triggering, Simulation, and Tracking**—by leveraging novel computing paradigms:
 
