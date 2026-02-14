@@ -1,0 +1,1828 @@
+---
+title: "Computational Vexillology"
+subtitle: "Part II: Distance, Clustering, and Hypotheses"
+author: "Alejandro Treny"
+date: today
+format:
+  html:
+    theme: flatly
+    code-fold: true
+    code-tools: true
+    toc: true
+    toc-location: left
+    toc-depth: 3
+    number-sections: true
+    smooth-scroll: true
+    page-layout: article
+    self-contained: true
+    mainfont: "Palatino, Georgia, serif"
+    include-in-header:
+      - text: |
+          <style>
+          .content { max-width: 860px; margin-left: auto; margin-right: auto; }
+          #quarto-content > * { max-width: 860px; }
+          .cell-output-display { max-width: 900px; margin-left: auto; margin-right: auto; }
+          </style>
+execute:
+  warning: false
+  message: false
+---
+
+## Introduction {.unnumbered}
+
+In [Part I](nootebook.html) we built a corpus of 250 national flags and extracted **19 numerical features** across five families: Color Palette, Color Complexity, Visual Complexity, Geometric Structure, and Aspect Ratio. Each flag is now a point in a 19-dimensional feature space.
+
+In this second notebook we ask: **what structure exists in that space?** We compute pairwise distances between flags, reduce the 19 dimensions to 2 for visualization, cluster flags into design families, and test four hypotheses about what drives flag similarity.
+
+```{python}
+#| label: setup
+#| code-summary: "Setup: imports and data loading"
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import plotly.express as px
+import cairosvg
+from PIL import Image
+from pathlib import Path
+from itables import show as itshow
+import io
+import warnings
+
+warnings.filterwarnings("ignore")
+
+# ---- Load the feature matrix exported from Part I ----
+df = pd.read_csv("data/flag_features.csv")
+
+# Separate identifiers from numeric features
+id_cols = ["code", "name"]
+feature_cols = [c for c in df.columns if c not in id_cols]
+
+print(f"Loaded: {df.shape[0]} flags x {len(feature_cols)} features")
+print(f"Features: {feature_cols}")
+itshow(df, lengthMenu=[5, 10, 25, 50], pageLength=5)
+```
+
+```{python}
+#| label: helpers
+#| code-summary: "Helper: rasterize SVG flags for display"
+
+flag_dir = Path("data/flags_svg")
+
+def rasterize_flag(svg_path, width=320):
+    """Rasterize an SVG flag to an RGB numpy array."""
+    png_data = cairosvg.svg2png(url=str(svg_path), output_width=width)
+    return np.array(Image.open(io.BytesIO(png_data)).convert("RGB"))
+```
+
+## Distance Analysis
+
+Our 19 features live on wildly different scales. Color percentages range from 0 to 1, `color_contrast` (CIEDE2000) ranges from 25 to 101, `palette_complexity` is an integer from 2 to 8, and `aspect_ratio` spans 0.82 to 2.55. If we compute distances on the raw features, the high-range variables would dominate and the others would contribute almost nothing.
+
+The standard fix is **z-score normalization**: subtract the mean and divide by the standard deviation of each feature. After this transformation every feature has mean 0 and standard deviation 1, so they all contribute equally to pairwise distances.
+
+We then compute two distance matrices:
+
+-   **Euclidean distance**, the straight-line distance in 19-D space. It captures magnitude differences: two flags are close when all their (standardized) features are numerically similar.
+-   **Cosine distance**, measures the angle between two feature vectors, ignoring magnitude. Two flags can have very different absolute feature values but still be "close" in cosine space if their feature *profiles* point in the same direction.
+
+Between them we get a richer view of similarity than either metric alone.
+
+```{python}
+#| label: distance-matrices
+#| code-summary: "Z-score standardization and pairwise distance matrices"
+
+from scipy.spatial.distance import pdist, squareform
+from sklearn.preprocessing import StandardScaler
+
+# ---- Z-score standardization ----
+# Each feature gets mean=0, std=1 so no single feature dominates the distance.
+scaler = StandardScaler()
+X_raw = df[feature_cols].values            # (250, 19) raw features
+X_std = scaler.fit_transform(X_raw)        # (250, 19) standardized
+
+# ---- Pairwise distance matrices (250 x 250) ----
+D_euclidean = squareform(pdist(X_std, metric="euclidean"))
+D_cosine    = squareform(pdist(X_std, metric="cosine"))
+
+# Quick sanity check
+codes = df["code"].values
+names = df["name"].values
+n = len(df)
+
+# Store as labeled DataFrames for easier lookup later
+df_euc = pd.DataFrame(D_euclidean, index=names, columns=names)
+df_cos = pd.DataFrame(D_cosine,    index=names, columns=names)
+
+print(f"Distance matrices computed: {n} x {n}")
+print(f"Euclidean -- min (non-self): {D_euclidean[D_euclidean > 0].min():.4f}, "
+      f"max: {D_euclidean.max():.4f}, mean: {D_euclidean[np.triu_indices(n, k=1)].mean():.4f}")
+print(f"Cosine    -- min (non-self): {D_cosine[D_cosine > 0].min():.4f}, "
+      f"max: {D_cosine.max():.4f}, mean: {D_cosine[np.triu_indices(n, k=1)].mean():.4f}")
+```
+
+### Near-duplicates
+
+Before we do anything else, let us see which flags our features consider *identical* or nearly so. A pair with Euclidean distance below 0.5 (in standardized space) shares almost the same 19-dimensional profile.
+
+```{python}
+#| label: near-duplicates
+#| code-summary: "Flag pairs with Euclidean distance < 0.5"
+
+# ---- Collect near-duplicate pairs ----
+threshold = 0.5
+pairs = []
+for i in range(n):
+    for j in range(i + 1, n):
+        if D_euclidean[i, j] < threshold:
+            pairs.append({
+                "flag_a": names[i],
+                "flag_b": names[j],
+                "euclidean_dist": round(D_euclidean[i, j], 4),
+                "cosine_dist":   round(D_cosine[i, j], 4),
+            })
+
+df_pairs = pd.DataFrame(pairs).sort_values("euclidean_dist").reset_index(drop=True)
+itshow(df_pairs, lengthMenu=[5, 10, 25], pageLength=15)
+```
+
+The table shows 13 pairs below the threshold, and they fall into two distinct categories.
+
+First, there are **political duplicates**, territories that officially fly the same flag as their parent state. France and Saint Martin, Bouvet Island and Svalbard (both Norwegian), and the US Minor Outlying Islands all register at distance zero because their feature vectors are literally identical. These are trivial matches.
+
+The interesting group is the **design twins**: flags from unrelated countries that converge on nearly the same visual formula. **Chad and Romania** (d = 0.04) are the most famous case in vexillology, both are vertical blue-yellow-red tricolors, differing only by a barely perceptible shift in the blue stripe's hue. **Netherlands and Russia** (d = 0.25) share the red-white-blue horizontal layout that became a template for dozens of nations after the French Revolution, though Russia's stripes are wider and its blue is darker. **Indonesia and Poland** (d = 0.43) are both minimal red-and-white bicolors, just flipped vertically. Even **Australia and New Zealand** (d = 0.47) appear here, reflecting their shared British-blue canton-and-stars formula.
+
+The fact that these well-known visual similarities all surface automatically from 19 numerical features is a strong validation: the feature space is capturing what the human eye sees.
+
+### Distance heatmap
+
+A 250 x 250 heatmap is large, but if we sort the flags by a meaningful order it reveals block structure. We use hierarchical clustering (Ward linkage) to reorder the rows and columns so that similar flags end up adjacent.
+
+```{python}
+#| label: distance-heatmap
+#| code-summary: "Clustered heatmap of Euclidean distances"
+
+from scipy.cluster.hierarchy import linkage, leaves_list
+
+# ---- Hierarchical clustering for row/column ordering ----
+condensed = pdist(X_std, metric="euclidean")
+Z = linkage(condensed, method="ward")
+order = leaves_list(Z)
+
+# ---- Reorder the distance matrix ----
+D_ordered = D_euclidean[np.ix_(order, order)]
+names_ordered = names[order]
+
+# ---- Plot with plotly for interactivity ----
+fig = px.imshow(
+    D_ordered,
+    x=names_ordered,
+    y=names_ordered,
+    color_continuous_scale="Viridis",
+    labels=dict(color="Euclidean Distance"),
+    title="Pairwise Euclidean Distance (Ward-ordered)",
+    aspect="equal",
+    width=850,
+    height=850,
+)
+fig.update_layout(
+    xaxis=dict(tickfont=dict(size=5), tickangle=90),
+    yaxis=dict(tickfont=dict(size=5)),
+    margin=dict(l=120, r=20, t=50, b=120),
+)
+fig.show()
+```
+
+The Ward-ordered heatmap reveals clear block structure along the diagonal. At least four or five dark square blocks stand out, each one a group of flags with low internal distances, in other words, proto-clusters of similar designs. The largest dark block (roughly in the upper-left quadrant) groups the simple tricolor and bicolor flags that dominate European and African vexillology. A second block collects the blue-canton, star-heavy flags common in Oceania and the Anglosphere.
+
+Equally telling are the bright off-diagonal rectangles: these are pairs of clusters that are maximally *dissimilar*. The brightest patches appear between the simple-bicolor group and the complex, multi-element flags of nations like Belize, Turkmenistan, or the Vatican, designs that score high on palette complexity and edge density where the simple flags score low.
+
+The overall distribution of color is not uniform: there is more bright area than dark, confirming that the average pair of flags is moderately distant (mean d ~ 6.0) and that truly similar pairs are the exception, not the rule.
+
+### Nearest neighbors
+
+For each flag, who are its 5 closest companions in the feature space? This table is the most intuitive way to interrogate the distance matrix.
+
+```{python}
+#| label: nearest-neighbors
+#| code-summary: "k=5 nearest neighbors (Euclidean) for every flag"
+
+# ---- Build a nearest-neighbors table ----
+k = 5
+rows = []
+for i in range(n):
+    dists = D_euclidean[i].copy()
+    dists[i] = np.inf  # exclude self
+    nn_idx = np.argsort(dists)[:k]
+    row = {"flag": names[i], "code": codes[i]}
+    for rank, j in enumerate(nn_idx, start=1):
+        row[f"neighbor_{rank}"] = names[j]
+        row[f"dist_{rank}"]     = round(dists[j], 2)
+    rows.append(row)
+
+df_nn = pd.DataFrame(rows)
+itshow(df_nn, lengthMenu=[5, 10, 25, 50], pageLength=10)
+```
+
+Scrolling through the table reveals some satisfying patterns. Pan-African flags cluster together: Kenya's nearest neighbor is South Sudan, Tanzania's is Saint Kitts and Nevis (both use diagonal black stripes over warm backgrounds). Nordic crosses find each other: Iceland's top match is Norway, Denmark's is Finland. The Pan-Arab tricolors (Egypt, Yemen, Iraq, Syria) form a tight neighborhood. And flags with the Union Jack canton, Australia, New Zealand, Fiji, Tuvalu, consistently appear in each other's top 5.
+
+There are also a few surprises. Japan's nearest neighbor is Cyprus (d ~ 1.9), which at first seems odd until you realize both are minimal flags with a single centered emblem on a white or near-white field, giving them similar low entropy, low edge density, and high symmetry. Hong Kong and Tunisia are neighbors (d ~ 0.38) because both are single-emblem-on-solid-background designs with similar color balances.
+
+These neighborhood relationships confirm that the distance metric is encoding *design grammar*, the structural vocabulary of how a flag is composed, rather than superficial color coincidence.
+
+### Most and least similar pairs
+
+Let us visualize the extremes: the 10 most similar and 10 most dissimilar pairs, shown side by side with their flags.
+
+```{python}
+#| label: extreme-pairs
+#| code-summary: "10 most similar and 10 most dissimilar flag pairs"
+
+# ---- Collect all unique pairs with distances ----
+triu_i, triu_j = np.triu_indices(n, k=1)
+all_pairs = pd.DataFrame({
+    "flag_a": names[triu_i],
+    "code_a": codes[triu_i],
+    "flag_b": names[triu_j],
+    "code_b": codes[triu_j],
+    "euclidean": D_euclidean[triu_i, triu_j],
+    "cosine":    D_cosine[triu_i, triu_j],
+})
+
+most_similar    = all_pairs.nsmallest(10, "euclidean").reset_index(drop=True)
+most_dissimilar = all_pairs.nlargest(10, "euclidean").reset_index(drop=True)
+```
+
+```{python}
+#| label: similar-strips
+#| code-summary: "Visual comparison: 10 most similar pairs"
+
+fig, axes = plt.subplots(10, 2, figsize=(8, 18))
+fig.suptitle("10 Most Similar Flag Pairs (Euclidean)", fontsize=14, y=1.01)
+
+for row_idx, (_, pair) in enumerate(most_similar.iterrows()):
+    for col, code_col, name_col in [(0, "code_a", "flag_a"), (1, "code_b", "flag_b")]:
+        svg = flag_dir / f"{pair[code_col]}.svg"
+        img = rasterize_flag(svg, width=320)
+        axes[row_idx, col].imshow(img)
+        axes[row_idx, col].set_title(pair[name_col], fontsize=8)
+        axes[row_idx, col].axis("off")
+    # Distance label between the pair
+    axes[row_idx, 0].annotate(
+        f"d = {pair['euclidean']:.2f}",
+        xy=(1.05, 0.5), xycoords="axes fraction",
+        fontsize=7, ha="left", va="center", color="gray",
+    )
+
+plt.tight_layout()
+plt.show()
+```
+
+The most similar pairs confirm the near-duplicates table with visual proof: the political duplicates (France/Saint Martin, Bouvet/Norway, US/US Minor Outlying Islands) are pixel-for-pixel identical. Among the non-trivial pairs, Chad and Romania look almost indistinguishable at thumbnail scale, you have to zoom in to notice the slightly more indigo blue on Chad's left stripe. Netherlands and Russia show the same red-white-blue stack with only a tone difference. Australia and New Zealand share the dark blue field with the Union Jack canton and a Southern Cross constellation.
+
+Now let us look at the opposite end of the spectrum:
+
+```{python}
+#| label: dissimilar-strips
+#| code-summary: "Visual comparison: 10 most dissimilar pairs"
+
+fig, axes = plt.subplots(10, 2, figsize=(8, 18))
+fig.suptitle("10 Most Dissimilar Flag Pairs (Euclidean)", fontsize=14, y=1.01)
+
+for row_idx, (_, pair) in enumerate(most_dissimilar.iterrows()):
+    for col, code_col, name_col in [(0, "code_a", "flag_a"), (1, "code_b", "flag_b")]:
+        svg = flag_dir / f"{pair[code_col]}.svg"
+        img = rasterize_flag(svg, width=320)
+        axes[row_idx, col].imshow(img)
+        axes[row_idx, col].set_title(pair[name_col], fontsize=8)
+        axes[row_idx, col].axis("off")
+    axes[row_idx, 0].annotate(
+        f"d = {pair['euclidean']:.2f}",
+        xy=(1.05, 0.5), xycoords="axes fraction",
+        fontsize=7, ha="left", va="center", color="gray",
+    )
+
+plt.tight_layout()
+plt.show()
+```
+
+The most dissimilar pairs pit the extremes of flag design against each other. A recurring pattern: one flag is chromatically minimal (white or single-hue background, simple geometry, high symmetry) while the other is chromatically dense (many colors, complex emblems, high edge density). Nepal appears repeatedly on the "dissimilar" side, its unique double-pennant shape gives it an outlier aspect ratio (~1.22 vs. the near-universal ~1.5-2.0) and unusual geometric features, making it distant from virtually every rectangular flag in the dataset.
+
+### Euclidean vs. Cosine agreement
+
+We computed two distance metrics. Do they agree on which flags are similar? If they do, the distance structure is robust and not an artifact of our metric choice. If they diverge for certain pairs, those cases are worth investigating: they would reveal flags that are similar in *profile shape* (feature direction) but not in *degree* (feature magnitudes), or vice versa.
+
+```{python}
+#| label: metric-agreement
+#| code-summary: "Scatter: Euclidean vs. Cosine distance for all pairs"
+
+# ---- Subsample for performance (31,125 pairs is fine for plotly) ----
+fig = px.scatter(
+    all_pairs,
+    x="euclidean",
+    y="cosine",
+    opacity=0.15,
+    title="Euclidean vs. Cosine Distance (all 31,125 pairs)",
+    labels={"euclidean": "Euclidean Distance (standardized)", "cosine": "Cosine Distance"},
+    width=750,
+    height=550,
+)
+fig.update_traces(marker=dict(size=3))
+fig.show()
+```
+
+```{python}
+#| label: metric-correlation
+#| code-summary: "Correlation between the two distance metrics"
+
+from scipy.stats import pearsonr, spearmanr
+
+r_pearson, _  = pearsonr(all_pairs["euclidean"], all_pairs["cosine"])
+r_spearman, _ = spearmanr(all_pairs["euclidean"], all_pairs["cosine"])
+
+print(f"Pearson  r = {r_pearson:.4f}")
+print(f"Spearman ρ = {r_spearman:.4f}")
+```
+
+The scatter plot shows a strong, monotonically increasing relationship with some spread at intermediate distances. The Pearson and Spearman correlations are both very high (in the 0.93-0.97 range), confirming that the two metrics largely agree: pairs that Euclidean considers most similar are also the ones Cosine ranks highest.
+
+The spread at mid-range distances is worth noting. Some pairs sit above the main trend (higher cosine distance than their Euclidean distance would predict), meaning they differ more in feature *direction* than in feature *magnitude*. These tend to be flags with similar overall complexity but different color palettes, for instance, a red-heavy flag vs. a blue-heavy flag with otherwise similar structure. Conversely, pairs below the trend have similar feature profiles pointing in the same direction but at different scales, flags that share the same design template but differ in how strongly each feature is expressed.
+
+Overall, the tight agreement between both metrics confirms that the similarity structure is a genuine property of the feature space, not an artifact of how we measure distance. For the remainder of the analysis we will primarily use Euclidean distance, knowing that Cosine would yield broadly the same conclusions.
+
+## Deep Learning Embeddings
+
+Our 19 hand-crafted features encode what *we* think matters about a flag: color proportions, palette complexity, edge density, symmetry. But are we missing something? A convolutional neural network trained on millions of natural images has learned to detect textures, spatial arrangements, and compositional patterns that no hand-crafted feature set can fully capture.
+
+To test this, we pass each flag through **ResNet-50** (pretrained on ImageNet), remove the final classification layer, and extract the 2048-dimensional embedding from the global average pooling layer. This vector is a learned representation of the flag's visual content. We then build a distance matrix from these embeddings and compare it against our artisanal distance matrix.
+
+The question is not "which is better?", each space encodes different information. The question is: **how much do they agree, and where do they disagree?**
+
+```{python}
+#| label: resnet-setup
+#| code-summary: "Load ResNet-50 backbone and define preprocessing"
+
+import torch
+import torch.nn as nn
+from torchvision import models, transforms
+
+# ---- Load pretrained ResNet-50 ----
+# We use the V2 weights (ImageNet-1K, 80.9% top-1 accuracy).
+resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
+resnet.eval()
+
+# ---- Remove the final classification layer ----
+# This leaves us with the 2048-dim output of the global average pooling layer:
+# a rich, general-purpose visual embedding.
+backbone = nn.Sequential(*list(resnet.children())[:-1])
+
+# ---- ImageNet-standard preprocessing ----
+# Resize to 256, center-crop to 224, normalize to ImageNet channel means/stds.
+preprocess = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225]),
+])
+
+print("ResNet-50 backbone loaded (2048-dim embeddings)")
+```
+
+```{python}
+#| label: extract-embeddings
+#| code-summary: "Extract 2048-dim embeddings for all 250 flags"
+
+import time
+
+# ---- Forward pass for every flag ----
+embeddings = []
+t0 = time.time()
+
+for _, row in df.iterrows():
+    # Rasterize SVG to PIL image
+    svg_path = flag_dir / f"{row['code']}.svg"
+    png_data = cairosvg.svg2png(url=str(svg_path), output_width=320)
+    img = Image.open(io.BytesIO(png_data)).convert("RGB")
+
+    # Preprocess and extract embedding
+    tensor = preprocess(img).unsqueeze(0)          # (1, 3, 224, 224)
+    with torch.no_grad():
+        emb = backbone(tensor).squeeze().numpy()   # (2048,)
+    embeddings.append(emb)
+
+X_deep = np.stack(embeddings)                      # (250, 2048)
+elapsed = time.time() - t0
+
+print(f"Extracted {X_deep.shape[0]} embeddings of dimension {X_deep.shape[1]} in {elapsed:.1f}s")
+print(f"Any NaN: {np.isnan(X_deep).any()}")
+```
+
+Each flag is now represented twice: as a 19-dimensional hand-crafted vector and as a 2048-dimensional learned vector. The hand-crafted features are interpretable (we know exactly what each dimension measures), while the deep features are opaque but potentially richer.
+
+```{python}
+#| label: deep-distances
+#| code-summary: "Cosine distance matrix from ResNet embeddings"
+
+from scipy.spatial.distance import pdist, squareform
+
+# ---- Pairwise cosine distance in embedding space ----
+# Cosine is the standard metric for neural embeddings because the magnitude
+# of the activation vector is less meaningful than its direction.
+D_deep = squareform(pdist(X_deep, metric="cosine"))
+
+print(f"Deep distance matrix: {D_deep.shape}")
+print(f"  min (non-self): {D_deep[D_deep > 0].min():.6f}")
+print(f"  max:            {D_deep.max():.6f}")
+print(f"  mean:           {D_deep[np.triu_indices(n, k=1)].mean():.6f}")
+```
+
+### Deep nearest neighbors
+
+Let us see who ResNet considers each flag's closest neighbors. The results are revealing, the deep model picks up on spatial layout and texture patterns that our hand-crafted features were not designed to capture.
+
+```{python}
+#| label: deep-nn
+#| code-summary: "k=5 nearest neighbors in ResNet embedding space"
+
+# ---- Build nearest-neighbor table from deep distances ----
+k = 5
+rows_deep = []
+for i in range(n):
+    dists = D_deep[i].copy()
+    dists[i] = np.inf
+    nn_idx = np.argsort(dists)[:k]
+    row = {"flag": names[i], "code": codes[i]}
+    for rank, j in enumerate(nn_idx, start=1):
+        row[f"neighbor_{rank}"] = names[j]
+        row[f"dist_{rank}"]     = round(dists[j], 4)
+    rows_deep.append(row)
+
+df_nn_deep = pd.DataFrame(rows_deep)
+itshow(df_nn_deep, lengthMenu=[5, 10, 25, 50], pageLength=10)
+```
+
+The deep model's neighborhoods reveal a different kind of intelligence. The United Kingdom's nearest neighbors are Turks and Caicos, Fiji, Bermuda, and Montserrat, all British Overseas Territories that fly blue ensigns with the Union Jack in the canton. Our artisanal features had matched the UK to Kiribati and Malaysia (similar color proportions), but ResNet actually *sees* the Union Jack pattern embedded in the corner and groups these flags together. That is a spatial relationship our hand-crafted features, which are all global summaries, cannot detect.
+
+Similarly, Japan's deep neighbors are Greenland, Bangladesh, and Palau, all flags with a single circular emblem on a plain field. The artisanal space had matched Japan to Cyprus (also a single emblem on white), but the deep model goes further and finds the *circular disk* pattern specifically, regardless of background color.
+
+Germany's deep neighbors are Indonesia, Austria, and Latvia, all horizontal stripe flags. France's are Saint Martin, Italy, Peru, and Ivory Coast, all vertical tricolors. The deep model is reading the stripe *orientation* and *spatial layout* more precisely than our Hough Transform features, which only measure dominance ratios.
+
+### Comparing the two spaces
+
+Now the key question: how much do the artisanal and deep distance matrices agree?
+
+```{python}
+#| label: space-comparison
+#| code-summary: "Artisanal vs. deep: Spearman correlation, neighbor overlap, Procrustes"
+
+from scipy.stats import spearmanr
+from scipy.spatial import procrustes
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+# ---- Artisanal distance matrix (Euclidean, standardized) ----
+X_std = StandardScaler().fit_transform(df[feature_cols].values)
+D_art = squareform(pdist(X_std, metric="euclidean"))
+
+# ---- 1. Spearman rank correlation between all 31,125 pairwise distances ----
+triu = np.triu_indices(n, k=1)
+rho_dist, p_dist = spearmanr(D_art[triu], D_deep[triu])
+
+# ---- 2. Neighbor overlap: fraction of shared neighbors at k=5 and k=10 ----
+results = {}
+for k in [5, 10]:
+    overlaps = []
+    for i in range(n):
+        art_nn  = set(np.argsort(D_art[i])[1:k+1])
+        deep_nn = set(np.argsort(D_deep[i])[1:k+1])
+        overlaps.append(len(art_nn & deep_nn) / k)
+    results[k] = overlaps
+
+# ---- 3. Procrustes disparity (in 10-D PCA space) ----
+# Reduce both embedding spaces to 10 dimensions, then measure how well
+# one can be rotated/scaled to match the other.
+pca_art  = PCA(n_components=10).fit_transform(X_std)
+pca_deep = PCA(n_components=10).fit_transform(X_deep)
+_, _, disparity = procrustes(pca_art, pca_deep)
+
+print("=== Artisanal vs. Deep Space Comparison ===\n")
+print(f"Spearman ρ (31,125 pairwise distances): {rho_dist:.4f}  (p ≈ {p_dist:.1e})")
+print(f"\nNeighbor overlap at k=5:  mean = {np.mean(results[5]):.3f}, "
+      f"median = {np.median(results[5]):.3f}")
+print(f"Neighbor overlap at k=10: mean = {np.mean(results[10]):.3f}, "
+      f"median = {np.median(results[10]):.3f}")
+print(f"\nProcrustes disparity (10-D): {disparity:.4f}")
+print(f"  (0 = identical geometry, 1 = unrelated)")
+```
+
+The numbers paint a clear picture. A Spearman correlation of ~0.37 is statistically significant (p ≈ 0) but moderate, the two spaces agree on the broad strokes (very similar flags in one space tend to be somewhat similar in the other) but disagree substantially on the details. The neighbor overlap of ~20% at k=5 means that, on average, only 1 out of every 5 nearest neighbors is shared between the two representations. And the Procrustes disparity of ~0.72 (where 0 is identical and 1 is unrelated) confirms that the geometric structure of the two spaces is quite different.
+
+This is exactly the outcome that makes both representations valuable. They are not redundant, they see different things.
+
+```{python}
+#| label: distance-scatter
+#| code-summary: "Scatter: artisanal vs. deep pairwise distances"
+
+# ---- Scatter plot of artisanal vs deep distances ----
+scatter_df = pd.DataFrame({
+    "artisanal_euclidean": D_art[triu],
+    "deep_cosine": D_deep[triu],
+})
+
+fig = px.scatter(
+    scatter_df,
+    x="artisanal_euclidean",
+    y="deep_cosine",
+    opacity=0.1,
+    title=f"Artisanal vs. Deep Pairwise Distances (ρ = {rho_dist:.3f})",
+    labels={
+        "artisanal_euclidean": "Artisanal Distance (Euclidean, z-scored)",
+        "deep_cosine": "Deep Distance (ResNet-50 cosine)",
+    },
+    width=750,
+    height=550,
+)
+fig.update_traces(marker=dict(size=3))
+fig.show()
+```
+
+The scatter shows a positive trend but with enormous spread. Pairs in the lower-left corner are similar in *both* spaces, these are the easy cases like Chad/Romania or France/Saint Martin where the flags are so alike that any representation picks them up. Pairs in the upper-right are dissimilar in both, flags with nothing in common by any measure.
+
+The interesting cases are the off-diagonal ones. Pairs in the **upper-left** (low artisanal distance, high deep distance) are flags that share similar color statistics but look spatially different. A horizontal red-white-blue tricolor and a vertical one might have identical color percentages but very different spatial structure that ResNet detects. Pairs in the **lower-right** (high artisanal distance, low deep distance) are flags that look spatially similar to ResNet but differ in the numeric features, for example, two flags with the same layout template but in completely different color palettes.
+
+### Where the models disagree
+
+Let us find the most interesting disagreements, pairs where the two spaces give contradictory rankings.
+
+```{python}
+#| label: disagreements
+#| code-summary: "Pairs with largest rank disagreement between spaces"
+
+# ---- Rank each pair in both spaces ----
+all_pairs_compare = pd.DataFrame({
+    "flag_a": names[triu[0]],
+    "code_a": codes[triu[0]],
+    "flag_b": names[triu[1]],
+    "code_b": codes[triu[1]],
+    "d_artisanal": D_art[triu],
+    "d_deep":      D_deep[triu],
+})
+
+all_pairs_compare["rank_art"]  = all_pairs_compare["d_artisanal"].rank()
+all_pairs_compare["rank_deep"] = all_pairs_compare["d_deep"].rank()
+all_pairs_compare["rank_diff"] = all_pairs_compare["rank_art"] - all_pairs_compare["rank_deep"]
+
+# Artisanal says "similar" but Deep says "different" (large negative rank_diff)
+art_close_deep_far = all_pairs_compare.nsmallest(10, "rank_diff")[
+    ["flag_a", "flag_b", "d_artisanal", "d_deep", "rank_diff"]
+].reset_index(drop=True)
+
+# Deep says "similar" but Artisanal says "different" (large positive rank_diff)
+deep_close_art_far = all_pairs_compare.nlargest(10, "rank_diff")[
+    ["flag_a", "flag_b", "d_artisanal", "d_deep", "rank_diff"]
+].reset_index(drop=True)
+
+print("=== Artisanal says SIMILAR, Deep says DIFFERENT ===")
+itshow(art_close_deep_far, lengthMenu=[10], pageLength=10)
+```
+
+```{python}
+#| label: disagreements-deep
+#| code-summary: "Pairs where Deep says similar but Artisanal says different"
+
+print("=== Deep says SIMILAR, Artisanal says DIFFERENT ===")
+itshow(deep_close_art_far, lengthMenu=[10], pageLength=10)
+```
+
+```{python}
+#| label: disagreement-strips
+#| code-summary: "Visual comparison of the top disagreements"
+
+fig, axes = plt.subplots(5, 2, figsize=(10, 12))
+fig.suptitle("Artisanal says SIMILAR, Deep says DIFFERENT",
+             fontsize=13, fontweight="bold", y=1.02)
+
+for row_idx in range(5):
+    pair = art_close_deep_far.iloc[row_idx]
+    for col, name_col in [(0, "flag_a"), (1, "flag_b")]:
+        code_val = df.loc[df["name"] == pair[name_col], "code"].values[0]
+        svg = flag_dir / f"{code_val}.svg"
+        img = rasterize_flag(svg, width=320)
+        axes[row_idx, col].imshow(img)
+        axes[row_idx, col].set_title(pair[name_col], fontsize=8)
+        axes[row_idx, col].axis("off")
+    axes[row_idx, 0].annotate(
+        f"Art d = {pair['d_artisanal']:.2f}\nDeep d = {pair['d_deep']:.2f}",
+        xy=(1.05, 0.5), xycoords="axes fraction",
+        fontsize=7, ha="left", va="center", color="gray",
+    )
+
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+#| label: disagreement-strips-deep
+#| code-summary: "Pairs where Deep says similar but Artisanal says different"
+
+fig, axes = plt.subplots(5, 2, figsize=(10, 12))
+fig.suptitle("Deep says SIMILAR, Artisanal says DIFFERENT",
+             fontsize=13, fontweight="bold", y=1.02)
+
+for row_idx in range(5):
+    pair = deep_close_art_far.iloc[row_idx]
+    for col, name_col in [(0, "flag_a"), (1, "flag_b")]:
+        code_val = df.loc[df["name"] == pair[name_col], "code"].values[0]
+        svg = flag_dir / f"{code_val}.svg"
+        img = rasterize_flag(svg, width=320)
+        axes[row_idx, col].imshow(img)
+        axes[row_idx, col].set_title(pair[name_col], fontsize=8)
+        axes[row_idx, col].axis("off")
+    axes[row_idx, 0].annotate(
+        f"Art d = {pair['d_artisanal']:.2f}\nDeep d = {pair['d_deep']:.2f}",
+        xy=(1.05, 0.5), xycoords="axes fraction",
+        fontsize=7, ha="left", va="center", color="gray",
+    )
+
+plt.tight_layout()
+plt.show()
+```
+
+The disagreement strips make the complementarity vivid. In the left columns (artisanal-close, deep-far), pairs share similar color statistics, the same proportions of red, blue, white, but their spatial layouts are very different. One might be a horizontal tricolor while the other has a diagonal stripe or a complex emblem. Our 19 features, which are all global averages, cannot distinguish these layouts, but ResNet's convolutional layers can.
+
+In the right columns (deep-close, artisanal-far), pairs look spatially similar to the neural network, similar layouts, similar placement of elements, but differ in color. A predominantly red flag and a predominantly green flag with the same stripe arrangement would end up here. ResNet's learned features partially abstract away from color (especially in deeper layers), focusing instead on edges, textures, and composition.
+
+This confirms the value of our dual approach: the artisanal features capture *what colors are present and how they relate*, while the deep features capture *how the flag is spatially organized*. Neither alone tells the whole story.
+
+## Dimensionality Reduction and Clustering
+
+We now have two complementary distance matrices: one from 19 hand-crafted features (Euclidean, z-scored) and one from 2048 ResNet-50 embeddings (cosine). Each captures a different facet of flag similarity. Rather than choosing one, we **fuse** them: normalize both to [0, 1] and take a 50/50 average. The result is a single distance matrix that benefits from the color-and-ratio sensitivity of the artisanal features *and* the spatial-layout intelligence of the deep model.
+
+We then use **UMAP** (Uniform Manifold Approximation and Projection) to compress this fused 250x250 distance matrix into 2 dimensions for visualization, and **HDBSCAN** (Hierarchical Density-Based Spatial Clustering of Applications with Noise) to discover natural groupings in the UMAP embedding. HDBSCAN is a good fit here because it does not require us to specify the number of clusters in advance, and it can label outlier flags as "noise" rather than forcing every flag into a group.
+
+```{python}
+#| label: fused-distances
+#| code-summary: "Fuse artisanal and deep distance matrices"
+
+# ---- Normalize both distance matrices to [0, 1] ----
+# This ensures that neither matrix dominates the average simply due to scale.
+D_art_norm  = D_euclidean / D_euclidean.max()
+D_deep_norm = D_deep / D_deep.max()
+
+# ---- 50/50 average ----
+D_fused = 0.5 * D_art_norm + 0.5 * D_deep_norm
+
+print(f"Fused distance matrix: {D_fused.shape}")
+print(f"  Range: [{D_fused[D_fused > 0].min():.4f}, {D_fused.max():.4f}]")
+print(f"  Mean:  {D_fused[np.triu_indices(n, k=1)].mean():.4f}")
+```
+
+### UMAP projections
+
+We run UMAP three times, once for each distance matrix, to see how each representation organizes the 250 flags in 2D. The fused map should inherit the best of both worlds.
+
+```{python}
+#| label: umap-embeddings
+#| code-summary: "UMAP 2D projections from artisanal, deep, and fused distances"
+
+import umap
+
+# ---- UMAP from precomputed distance matrices ----
+umap_results = {}
+for label, D in [("Artisanal", D_euclidean), ("Deep", D_deep), ("Fused", D_fused)]:
+    reducer = umap.UMAP(
+        n_neighbors=15,
+        min_dist=0.1,
+        metric="precomputed",
+        random_state=42,
+    )
+    emb_2d = reducer.fit_transform(D)
+    umap_results[label] = emb_2d
+    print(f"UMAP {label}: done")
+
+# We will use the fused embedding going forward
+umap_fused = umap_results["Fused"]
+```
+
+```{python}
+#| label: umap-triptych
+#| code-summary: "Side-by-side UMAP maps: artisanal, deep, and fused"
+
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+
+fig = make_subplots(
+    rows=1, cols=3,
+    subplot_titles=["Artisanal Features", "ResNet-50 Embeddings", "Fused (50/50)"],
+    horizontal_spacing=0.05,
+)
+
+for idx, (label, emb) in enumerate(umap_results.items(), start=1):
+    fig.add_trace(
+        go.Scatter(
+            x=emb[:, 0], y=emb[:, 1],
+            mode="markers+text",
+            text=codes,
+            textposition="top center",
+            textfont=dict(size=6),
+            marker=dict(size=5, opacity=0.7),
+            hovertext=[f"{n} ({c})" for n, c in zip(names, codes)],
+            hoverinfo="text",
+            showlegend=False,
+        ),
+        row=1, col=idx,
+    )
+
+fig.update_layout(
+    title="UMAP Projections: Three Views of Flag Space",
+    width=1100, height=450,
+    margin=dict(t=60, b=30),
+)
+for i in range(1, 4):
+    fig.update_xaxes(showticklabels=False, row=1, col=i)
+    fig.update_yaxes(showticklabels=False, row=1, col=i)
+
+fig.show()
+```
+
+The three maps tell a story about what each representation values. The artisanal map organizes flags primarily by color palette: red-dominant flags cluster on one side, blue-dominant on another, with the multi-color complex flags forming a separate peninsula. The deep map groups by spatial layout: horizontal stripes, vertical tricolors, canton-based ensigns, and single-emblem-on-field designs each carve out their own regions. The fused map inherits both organizing principles, flags that share *both* color and layout end up tightly clustered, while flags that match on only one dimension sit at intermediate distances.
+
+### HDBSCAN clustering
+
+```{python}
+#| label: hdbscan-clustering
+#| code-summary: "HDBSCAN clustering on the fused UMAP embedding"
+
+import hdbscan
+
+# ---- Cluster the fused UMAP embedding ----
+clusterer = hdbscan.HDBSCAN(min_cluster_size=8, min_samples=3)
+cluster_labels = clusterer.fit_predict(umap_fused)
+
+n_clusters = len(set(cluster_labels) - {-1})
+n_noise = (cluster_labels == -1).sum()
+
+# ---- Attach cluster labels to the DataFrame ----
+df["cluster"] = cluster_labels
+df["umap_x"] = umap_fused[:, 0]
+df["umap_y"] = umap_fused[:, 1]
+
+print(f"HDBSCAN found {n_clusters} clusters and {n_noise} noise points")
+print(f"\nCluster sizes:")
+for c in sorted(set(cluster_labels)):
+    mask = cluster_labels == c
+    label_str = f"Cluster {c}" if c >= 0 else "Noise"
+    members = names[mask]
+    print(f"  {label_str:12s} ({mask.sum():3d} flags): {', '.join(members[:6])}...")
+```
+
+```{python}
+#| label: cluster-map
+#| code-summary: "Interactive UMAP map colored by cluster"
+
+# ---- Color by cluster, noise in gray ----
+df["cluster_label"] = df["cluster"].apply(
+    lambda c: f"Cluster {c}" if c >= 0 else "Noise"
+)
+
+fig = px.scatter(
+    df,
+    x="umap_x",
+    y="umap_y",
+    color="cluster_label",
+    hover_name="name",
+    hover_data={"code": True, "umap_x": False, "umap_y": False, "cluster_label": False},
+    text="code",
+    title="Flag Clusters (HDBSCAN on Fused UMAP)",
+    labels={"umap_x": "", "umap_y": ""},
+    width=850,
+    height=650,
+)
+fig.update_traces(
+    textposition="top center",
+    textfont=dict(size=6),
+    marker=dict(size=7),
+)
+# ---- Make noise points dark gray so they don't compete with cluster colors ----
+for trace in fig.data:
+    if trace.name == "Noise":
+        trace.marker.color = "rgba(80, 80, 80, 0.5)"
+        trace.marker.size = 5
+fig.update_xaxes(showticklabels=False)
+fig.update_yaxes(showticklabels=False)
+fig.update_layout(legend_title_text="Cluster", margin=dict(t=50, b=30))
+fig.show()
+```
+
+### Cluster portraits
+
+What does each cluster look like? For every cluster we show a grid of its member flags together with a summary of the feature profiles that define it.
+
+```{python}
+#| label: cluster-profiles
+#| code-summary: "Mean feature profile per cluster"
+
+# ---- Compute mean feature values per cluster (excluding noise) ----
+cluster_profiles = (
+    df[df["cluster"] >= 0]
+    .groupby("cluster")[feature_cols]
+    .mean()
+    .round(3)
+)
+
+itshow(cluster_profiles.T, lengthMenu=[10, 19], pageLength=19)
+```
+
+```{python}
+#| label: cluster-grids
+#| code-summary: "Flag grids for each cluster"
+
+clusters_sorted = sorted([c for c in set(cluster_labels) if c >= 0])
+
+for c in clusters_sorted:
+    mask = cluster_labels == c
+    member_codes = codes[mask]
+    member_names = names[mask]
+    n_members = len(member_codes)
+
+    # Grid layout: up to 6 columns
+    ncols = min(6, n_members)
+    nrows = int(np.ceil(n_members / ncols))
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 2.2, nrows * 1.5))
+    if nrows == 1:
+        axes = np.array(axes).reshape(1, -1)
+    fig.suptitle(f"Cluster {c}  ({n_members} flags)", fontsize=12, y=1.02)
+
+    for idx in range(nrows * ncols):
+        r, col_idx = divmod(idx, ncols)
+        if idx < n_members:
+            svg = flag_dir / f"{member_codes[idx]}.svg"
+            img = rasterize_flag(svg, width=240)
+            axes[r, col_idx].imshow(img)
+            axes[r, col_idx].set_title(member_names[idx], fontsize=6)
+        axes[r, col_idx].axis("off")
+
+    plt.tight_layout()
+    plt.show()
+```
+
+The cluster grids make the organizing logic visible at a glance. Each cluster coheres around a shared design template: horizontal tricolors with similar hue sequences, vertical tricolors, canton-based blue ensigns, diagonal multicolor designs, single-emblem-on-solid-field arrangements, and so on. The noise points are flags that do not fit neatly into any group; these tend to be the most distinctive designs in the dataset, like Nepal's double pennant, Bhutan's dragon, or the Vatican's papal keys.
+
+### Cluster stability
+
+How robust are these clusters? Would small changes in the data or the UMAP parameters break them apart? We test this by re-running the full pipeline (UMAP + HDBSCAN) 20 times with different random seeds and measuring how consistently each pair of flags ends assigned to the same cluster.
+
+```{python}
+#| label: cluster-stability
+#| code-summary: "Cluster co-assignment stability across 20 random seeds"
+
+# ---- Run UMAP+HDBSCAN 20 times with different seeds ----
+n_runs = 20
+co_assignment = np.zeros((n, n))
+
+for seed in range(n_runs):
+    reducer = umap.UMAP(
+        n_neighbors=15, min_dist=0.1,
+        metric="precomputed", random_state=seed,
+    )
+    emb = reducer.fit_transform(D_fused)
+    labels = hdbscan.HDBSCAN(min_cluster_size=8, min_samples=3).fit_predict(emb)
+
+    # For each pair, record if they were in the same (non-noise) cluster
+    for c in set(labels):
+        if c < 0:
+            continue
+        members = np.where(labels == c)[0]
+        for i in members:
+            for j in members:
+                co_assignment[i, j] += 1
+
+co_assignment /= n_runs  # normalize to [0, 1]
+
+# ---- Summary statistics ----
+triu_vals = co_assignment[np.triu_indices(n, k=1)]
+print(f"Co-assignment matrix: {co_assignment.shape}")
+print(f"  Mean co-assignment probability: {triu_vals.mean():.3f}")
+print(f"  Pairs always together (p=1.0):  {(triu_vals == 1.0).sum()}")
+print(f"  Pairs never together (p=0.0):   {(triu_vals == 0.0).sum()}")
+
+# ---- Average stability per flag ----
+stability_per_flag = []
+for i in range(n):
+    # Mean co-assignment with flags in the same primary cluster
+    primary_cluster = cluster_labels[i]
+    if primary_cluster >= 0:
+        same = np.where(cluster_labels == primary_cluster)[0]
+        same = same[same != i]
+        if len(same) > 0:
+            stability_per_flag.append(co_assignment[i, same].mean())
+        else:
+            stability_per_flag.append(0.0)
+    else:
+        stability_per_flag.append(0.0)
+
+df["stability"] = stability_per_flag
+mean_stab = np.mean([s for s in stability_per_flag if s > 0])
+print(f"  Mean within-cluster stability: {mean_stab:.3f}")
+```
+
+```{python}
+#| label: stability-plot
+#| code-summary: "Co-assignment heatmap (ordered by cluster)"
+
+# ---- Reorder by cluster for visualization ----
+order_stab = np.argsort(cluster_labels)
+co_ordered = co_assignment[np.ix_(order_stab, order_stab)]
+names_stab_ordered = names[order_stab]
+
+fig = px.imshow(
+    co_ordered,
+    x=names_stab_ordered,
+    y=names_stab_ordered,
+    color_continuous_scale="Blues",
+    labels=dict(color="Co-assignment Prob."),
+    title="Cluster Co-assignment Stability (20 UMAP seeds)",
+    aspect="equal",
+    width=850,
+    height=850,
+)
+fig.update_layout(
+    xaxis=dict(tickfont=dict(size=5), tickangle=90),
+    yaxis=dict(tickfont=dict(size=5)),
+    margin=dict(l=120, r=20, t=50, b=120),
+)
+fig.show()
+```
+
+The co-assignment heatmap reveals which clusters are rock-solid and which are more fluid. The darkest diagonal blocks, pairs that stay together in 100% of the 20 runs, represent the most natural, unambiguous groupings in flag space. Lighter blocks at the boundaries indicate flags that sometimes get assigned to a neighboring cluster, revealing the fuzzy frontiers between design families. The noise flags (typically in the upper-left, since they sort first) show near-zero co-assignment with everything, confirming their status as genuine outliers.
+
+## Hypothesis Engine
+
+We have discovered that national flags organize into coherent visual clusters. The natural next question is: **why?** Are these clusters random, or do they correlate with real-world properties of the nations behind them, their geography, history, wealth, or political status?
+
+To answer this, we enrich our dataset with country-level metadata from the REST Countries API: geographic region, subregion, continent, latitude, longitude, population, area, landlocked status, independence, UN membership, Gini coefficient (income inequality), number of official languages, number of land borders, and driving side. We then run a battery of statistical tests to discover which of these variables are associated with flag design.
+
+```{python}
+#| label: fetch-metadata
+#| code-summary: "Fetch country metadata from REST Countries API"
+
+import requests
+
+# ---- Two API calls (max 10 fields each) ----
+fields_geo = "name,cca2,region,subregion,latlng,population,area,landlocked,independent"
+fields_cul = "name,cca2,languages,gini,continents,borders,unMember,car"
+
+batch_geo = {c["cca2"].lower(): c for c in
+             requests.get(f"https://restcountries.com/v3.1/all?fields={fields_geo}").json()}
+batch_cul = {c["cca2"].lower(): c for c in
+             requests.get(f"https://restcountries.com/v3.1/all?fields={fields_cul}").json()}
+
+# ---- Build metadata table ----
+meta_rows = []
+for code in codes:
+    g = batch_geo.get(code, {})
+    c = batch_cul.get(code, {})
+    ll = g.get("latlng", [])
+    lat, lng = (ll[0], ll[1]) if len(ll) == 2 else (None, None)
+    gini_dict = c.get("gini", {})
+    langs = c.get("languages", {})
+
+    meta_rows.append({
+        "code":         code,
+        "region":       g.get("region"),
+        "subregion":    g.get("subregion"),
+        "continent":    c.get("continents", [None])[0] if c.get("continents") else None,
+        "latitude":     lat,
+        "longitude":    lng,
+        "abs_latitude":  abs(lat) if lat is not None else None,
+        "population":   g.get("population"),
+        "area_km2":     g.get("area"),
+        "landlocked":   g.get("landlocked"),
+        "independent":  g.get("independent"),
+        "un_member":    c.get("unMember"),
+        "n_languages":  len(langs) if langs else None,
+        "n_borders":    len(c.get("borders", [])),
+        "gini":         max(gini_dict.values()) if gini_dict else None,
+        "drive_side":   c.get("car", {}).get("side"),
+    })
+
+df_meta = pd.DataFrame(meta_rows)
+
+# ---- Merge with flag features + cluster labels ----
+df_full = df.merge(df_meta, on="code")
+df_clust = df_full[df_full["cluster"] >= 0].copy()
+
+print(f"Metadata loaded for {len(df_meta)} entities")
+print(f"Flags in clusters: {len(df_clust)}, Noise points: {(df_full['cluster'] < 0).sum()}")
+print(f"Gini coverage: {df_meta['gini'].notna().sum()} / {len(df_meta)}")
+```
+
+### Do clusters reflect geography?
+
+The most fundamental question: do flags that *look* alike come from the same part of the world? We test this with a chi-squared test of association between cluster membership and geographic region (or continent, or subregion). The effect size is measured by Cramer's V, which ranges from 0 (no association) to 1 (perfect association).
+
+```{python}
+#| label: chi-squared-geo
+#| code-summary: "Chi-squared tests: cluster vs. geographic and political variables"
+
+from scipy.stats import chi2_contingency
+
+# ---- Chi-squared tests for categorical variables ----
+cat_vars = ["region", "continent", "subregion", "landlocked",
+            "independent", "un_member", "drive_side"]
+
+chi_results = []
+for var in cat_vars:
+    ct = pd.crosstab(df_clust["cluster"], df_clust[var])
+    if ct.shape[0] > 1 and ct.shape[1] > 1:
+        chi2, p, dof, _ = chi2_contingency(ct)
+        cramers_v = np.sqrt(chi2 / (ct.sum().sum() * (min(ct.shape) - 1)))
+        chi_results.append({
+            "variable": var,
+            "chi2": round(chi2, 1),
+            "p_value": p,
+            "cramers_v": round(cramers_v, 3),
+            "significant": "Yes" if p < 0.01 else "No",
+        })
+
+df_chi = pd.DataFrame(chi_results).sort_values("cramers_v", ascending=False)
+itshow(df_chi, pageLength=10)
+```
+
+The results are striking. **Subregion** shows the strongest association (Cramer's V ~ 0.48), followed by **continent** and **region**, all highly significant (p < 0.001). This means flag clusters are not randomly distributed across the globe: certain visual designs concentrate in specific parts of the world. Pan-African color schemes cluster African nations, the Nordic cross unites Scandinavian countries, the blue-ensign template connects the former British Empire, and Pan-Arab tricolors group Middle Eastern and North African states.
+
+**Independence** and **UN membership** also show significant (p < 0.01) associations, reflecting the fact that dependent territories (colonies, overseas departments) tend to inherit their sovereign's flag design, the blue ensign cluster is almost entirely made up of British dependencies.
+
+**Landlocked** and **drive side** show no significant association with flag design, which makes sense: these are practical facts about a country that have no reason to influence its symbols.
+
+### Do clusters reflect latitude?
+
+The "Solar Determinism" hypothesis: do countries closer to the equator use warmer colors (red, yellow) while countries at higher latitudes prefer cooler, simpler designs?
+
+```{python}
+#| label: kruskal-continuous
+#| code-summary: "Kruskal-Wallis tests: cluster vs. continuous variables"
+
+from scipy.stats import kruskal
+
+# ---- Kruskal-Wallis for continuous variables ----
+cont_vars = ["abs_latitude", "latitude", "longitude", "population",
+             "area_km2", "gini", "n_languages", "n_borders"]
+
+kw_results = []
+for var in cont_vars:
+    valid = df_clust.dropna(subset=[var])
+    groups = [g[var].values for _, g in valid.groupby("cluster")]
+    groups = [g for g in groups if len(g) > 0]
+    if len(groups) > 1:
+        H, p = kruskal(*groups)
+        N, k = len(valid), len(groups)
+        eta_sq = (H - k + 1) / (N - k)
+        kw_results.append({
+            "variable": var,
+            "H_statistic": round(H, 1),
+            "p_value": p,
+            "eta_squared": round(eta_sq, 3),
+            "significant": "Yes" if p < 0.01 else "No",
+        })
+
+df_kw = pd.DataFrame(kw_results).sort_values("eta_squared", ascending=False)
+itshow(df_kw, pageLength=10)
+```
+
+**Absolute latitude** is significantly associated with cluster membership (p < 0.001, η² ~ 0.06). This supports the Solar Determinism hypothesis: tropical nations genuinely tend to land in different flag clusters than temperate or polar ones. **Population**, **area**, and **number of borders** are also significant, larger, more connected countries end up in different design families than small island territories. The Gini coefficient (income inequality) does not reach significance at the cluster level, but as we will see, it shows compelling feature-level correlations.
+
+### Feature-level correlations
+
+Beyond cluster membership, which *individual* flag features correlate with which country properties? This gives us more granular insight.
+
+```{python}
+#| label: solar-correlations
+#| code-summary: "Spearman correlations: flag features vs. absolute latitude"
+
+from scipy.stats import spearmanr
+
+# ---- Features vs |latitude| ----
+v = df_full.dropna(subset=["abs_latitude"])
+solar_rows = []
+for f in feature_cols:
+    rho, p = spearmanr(v["abs_latitude"], v[f])
+    solar_rows.append({"feature": f, "rho": round(rho, 3), "p_value": p, "abs_rho": abs(rho)})
+
+df_solar = (pd.DataFrame(solar_rows)
+            .sort_values("abs_rho", ascending=False)
+            .drop(columns="abs_rho")
+            .reset_index(drop=True))
+itshow(df_solar, pageLength=19)
+```
+
+The Solar Determinism hypothesis finds real support in the data. As latitude increases (moving away from the equator):
+
+- **Yellow** and **green** percentages *decrease* (ρ ~ -0.29, -0.29), tropical nations use significantly more warm greens and yellows, the colors of vegetation, earth, and sunlight.
+- **White** percentage *increases* (ρ ~ +0.24), higher-latitude nations use more white, the color of snow and winter.
+- **Vertical dominance** increases (ρ ~ +0.22), northern nations favor vertical stripes (European tricolors), while tropical nations show more diagonal elements.
+- **Palette complexity** and **visual entropy** decrease with latitude, temperate and polar flags tend to be *simpler*.
+
+```{python}
+#| label: latitude-scatter
+#| code-summary: "Yellow percentage vs. absolute latitude"
+
+fig = px.scatter(
+    df_full.dropna(subset=["abs_latitude"]),
+    x="abs_latitude",
+    y="yellow_pct",
+    hover_name="name",
+    trendline="ols",
+    title="Solar Determinism: Yellow Fades with Latitude",
+    labels={"abs_latitude": "Absolute Latitude (°)", "yellow_pct": "Yellow Percentage"},
+    width=750,
+    height=500,
+)
+fig.update_traces(marker=dict(size=6, opacity=0.6))
+fig.show()
+```
+
+```{python}
+#| label: gini-correlations
+#| code-summary: "Spearman correlations: flag features vs. Gini coefficient"
+
+# ---- Features vs Gini (inequality) ----
+v3 = df_full.dropna(subset=["gini"])
+gini_rows = []
+for f in feature_cols:
+    rho, p = spearmanr(v3["gini"], v3[f])
+    gini_rows.append({"feature": f, "rho": round(rho, 3), "p_value": p, "abs_rho": abs(rho)})
+
+df_gini = (pd.DataFrame(gini_rows)
+           .sort_values("abs_rho", ascending=False)
+           .drop(columns="abs_rho")
+           .reset_index(drop=True))
+itshow(df_gini, pageLength=19)
+```
+
+The Gini correlation table reveals something unexpected and fascinating. Higher income inequality is associated with:
+
+- **More palette complexity** (ρ ~ +0.32), the strongest single correlation. Countries with greater inequality tend to have flags with more distinct colors.
+- **More yellow** (ρ ~ +0.28) and **more green** (ρ ~ +0.22), the warm colors of the Global South.
+- **Higher visual entropy** (ρ ~ +0.27) and **edge density** (ρ ~ +0.21), more complex, busier flag designs.
+- **Less red** (ρ ~ -0.19) and **less aggression** (ρ ~ -0.17).
+
+This is likely a confound with geography (high-Gini countries tend to be tropical, post-colonial nations), but it raises a provocative question: do nations with more complex social stratification produce more complex national symbols? Or is it simply that the Pan-African and Pan-American design traditions, which emphasize multi-color richness, happen to belong to regions with higher inequality?
+
+```{python}
+#| label: gini-scatter
+#| code-summary: "Palette complexity vs. Gini coefficient"
+
+fig = px.scatter(
+    df_full.dropna(subset=["gini"]),
+    x="gini",
+    y="palette_complexity",
+    hover_name="name",
+    color="region",
+    trendline="ols",
+    title="Inequality and Flag Complexity: More Gini, More Colors",
+    labels={"gini": "Gini Coefficient", "palette_complexity": "Palette Complexity (distinct colors)"},
+    width=750,
+    height=500,
+)
+fig.update_traces(marker=dict(size=7, opacity=0.7))
+fig.show()
+```
+
+Coloring by region in the scatter above helps disentangle the confound. The trend is not entirely driven by geography: within every region, there is a positive slope. African nations vary enormously in both Gini and palette complexity, and the correlation holds within Africa alone. European flags are clustered at the low end of both axes, but even there, more unequal European countries (like Portugal, with its complex coat of arms) have slightly more complex flags.
+
+```{python}
+#| label: population-correlations
+#| code-summary: "Spearman correlations: flag features vs. log(population)"
+
+# ---- Features vs log(population) ----
+v2 = df_full[df_full["population"] > 0].copy()
+v2["log_pop"] = np.log10(v2["population"])
+
+pop_rows = []
+for f in feature_cols:
+    rho, p = spearmanr(v2["log_pop"], v2[f])
+    pop_rows.append({"feature": f, "rho": round(rho, 3), "p_value": p, "abs_rho": abs(rho)})
+
+df_pop = (pd.DataFrame(pop_rows)
+          .sort_values("abs_rho", ascending=False)
+          .drop(columns="abs_rho")
+          .reset_index(drop=True))
+itshow(df_pop, pageLength=19)
+```
+
+Population reveals a complementary pattern. Larger nations have flags that are:
+
+- **Less blue** (ρ ~ -0.31), small island territories and former colonies (which use blue ensigns) dominate the small-population end.
+- **Simpler** (lower palette complexity, ρ ~ -0.21; lower edge density, ρ ~ -0.28), large nations can afford iconic, instantly recognizable designs.
+- **More symmetric** (ρ ~ +0.26), a simple, symmetric flag works better at scale, on everything from passport covers to UN flagpoles.
+- **More aggressive** (higher red, ρ ~ +0.20; higher aggression index, ρ ~ +0.23), large nations lean toward the red end of the spectrum.
+- **Less diagonal** (ρ ~ -0.21), large nations prefer the stability of horizontal and vertical stripes.
+
+```{python}
+#| label: population-scatter
+#| code-summary: "Blue percentage vs. log(population)"
+
+fig = px.scatter(
+    v2,
+    x="log_pop",
+    y="blue_pct",
+    hover_name="name",
+    color="region",
+    title="Big Nations Avoid Blue: Population vs. Blue Percentage",
+    labels={"log_pop": "log₁₀(Population)", "blue_pct": "Blue Percentage"},
+    width=750,
+    height=500,
+)
+fig.update_traces(marker=dict(size=7, opacity=0.7))
+fig.show()
+```
+
+The blue-population scatter confirms this vividly. The upper-left quadrant (small population, high blue) is packed with Oceanian and Caribbean territories, Anguilla, Montserrat, Tuvalu, Guam, all flying blue-field flags inherited from colonial powers. The lower-right (large population, low blue) holds the major nations: China, India, Indonesia, Brazil, Nigeria. This is partly a colonial confound (small territories = dependencies = inherited blue ensigns), but it suggests a genuine rule of vexillography: *big countries need bold, distinctive flags; small territories can afford to blend in*.
+
+### Cluster composition by region
+
+```{python}
+#| label: cluster-region-heatmap
+#| code-summary: "Cluster vs. Region heatmap"
+
+# ---- Crosstab: cluster x region (proportions within cluster) ----
+ct = pd.crosstab(df_clust["cluster"], df_clust["region"], normalize="index")
+
+fig = px.imshow(
+    ct.values,
+    x=ct.columns.tolist(),
+    y=[f"Cluster {c}" for c in ct.index],
+    color_continuous_scale="YlOrRd",
+    labels=dict(color="Proportion"),
+    title="Regional Composition of Each Flag Cluster",
+    aspect="auto",
+    width=750,
+    height=500,
+)
+fig.update_layout(margin=dict(l=100, r=20, t=50, b=50))
+fig.show()
+```
+
+The cluster-by-region heatmap is the clearest summary of our findings. Some clusters are overwhelmingly dominated by a single region, these are the design traditions inherited from colonial or cultural history. Others are genuinely cross-continental, grouping visually similar flags from unrelated parts of the world. The latter are the most interesting: they suggest universal principles of design convergence, where unrelated nations independently arrived at similar visual solutions.
+
+### Region composition by cluster
+
+The heatmap above shows *what each cluster is made of*. The reverse question is equally revealing: *where does each region's flags end up?* Do all African flags land in the same cluster, or are they scattered across several design families?
+
+```{python}
+#| label: region-cluster-heatmap
+#| code-summary: "Region → Cluster distribution heatmap"
+
+# ---- Crosstab: region x cluster (proportions within region) ----
+ct_rev = pd.crosstab(df_clust["region"], df_clust["cluster"], normalize="index")
+
+fig = px.imshow(
+    ct_rev.values,
+    x=[f"Cluster {c}" for c in ct_rev.columns],
+    y=ct_rev.index.tolist(),
+    color_continuous_scale="YlOrRd",
+    labels=dict(color="Proportion"),
+    title="Where Does Each Region's Flags End Up?",
+    aspect="auto",
+    width=750,
+    height=400,
+)
+fig.update_layout(margin=dict(l=100, r=20, t=50, b=50))
+fig.show()
+```
+
+The reverse heatmap tells a complementary story. Some regions scatter their flags across many clusters: **Africa** spans at least five different design families, reflecting the diversity of Pan-African, Pan-Arab, and post-colonial design traditions coexisting on the same continent. **Oceania**, by contrast, concentrates into one or two clusters, reflecting the overwhelming influence of the British blue-ensign template. **Europe** splits cleanly between horizontal and vertical tricolors, with a few outliers in the red-dominant clusters. **The Americas** distribute more evenly, with Caribbean territories landing in different clusters than Central and South American nations.
+
+### Beyond geography: climate, wealth, and strange correlations
+
+We have shown that flag clusters correlate with geography. But geography is a proxy for many things: climate, colonial history, economic development, cultural traditions. To disentangle these factors, we enriched our dataset with external data from two APIs. From the **Open-Meteo Archive API** we obtained 2023 daily climate records for each country's coordinates: average annual temperature, total precipitation, and total sunshine hours. From the **World Bank API** we fetched GDP per capita, life expectancy, and forest cover percentage.
+
+```{python}
+#| label: load-extra
+#| code-summary: "Load external data: climate (Open-Meteo) + development (World Bank)"
+
+# ---- Load the external data we fetched via API ----
+df_extra = pd.read_csv("data/extra_metadata.csv")
+
+# ---- Merge into our working DataFrame ----
+df_full = df_full.merge(df_extra, on="code", how="left")
+df_clust = df_full[df_full["cluster"] >= 0].copy()
+
+print("Extra variable coverage:")
+for col in ["avg_temp_c", "annual_precip_mm", "annual_sunshine_hrs",
+            "gdp_per_capita", "life_expectancy", "forest_pct"]:
+    n = df_full[col].notna().sum()
+    print(f"  {col:25s}: {n}/{len(df_full)}")
+```
+
+With 12 external variables and 19 flag features, we have 228 possible correlations. Most of them are noise. Rather than testing every combination and pretending to find patterns, we took the opposite approach: we computed all 228 Spearman correlations, kept only those with |ρ| > 0.20 *and* p < 0.01, and discarded the rest. The full matrix is shown at the end of this section; here we focus on the handful of relationships that are genuinely strong.
+
+### The full correlation map
+
+Let us start with the big picture. The heatmap below shows every Spearman correlation between external variables and flag features. Cells colored deep red or deep blue represent real, strong associations; cells near white represent statistical noise.
+
+```{python}
+#| label: full-correlation-heatmap
+#| code-summary: "Full Spearman correlation heatmap: external variables vs. flag features"
+
+from scipy.stats import spearmanr
+
+# ---- Compute all pairwise Spearman correlations ----
+external_vars = ["abs_latitude", "avg_temp_c", "annual_precip_mm",
+                 "annual_sunshine_hrs", "gdp_per_capita", "life_expectancy",
+                 "forest_pct", "gini", "population", "area_km2",
+                 "n_languages", "n_borders"]
+
+corr_matrix = []
+pval_matrix = []
+for ext in external_vars:
+    row_rho, row_p = [], []
+    v = df_full.dropna(subset=[ext]).copy()
+    if ext in ["gdp_per_capita", "population", "area_km2"]:
+        v[ext] = np.log10(v[ext].clip(lower=1))
+    for f in feature_cols:
+        rho, p = spearmanr(v[ext], v[f])
+        row_rho.append(round(rho, 3))
+        row_p.append(p)
+    corr_matrix.append(row_rho)
+    pval_matrix.append(row_p)
+
+corr_df = pd.DataFrame(corr_matrix, index=external_vars, columns=feature_cols)
+pval_df = pd.DataFrame(pval_matrix, index=external_vars, columns=feature_cols)
+
+# ---- Mask non-significant correlations for annotation ----
+annot = corr_df.copy().astype(str)
+for i in range(len(external_vars)):
+    for j in range(len(feature_cols)):
+        rho = corr_matrix[i][j]
+        p = pval_matrix[i][j]
+        if abs(rho) >= 0.20 and p < 0.01:
+            annot.iloc[i, j] = f"{rho:+.2f}"
+        else:
+            annot.iloc[i, j] = ""
+
+fig = px.imshow(
+    corr_df.values,
+    x=feature_cols,
+    y=external_vars,
+    color_continuous_scale="RdBu_r",
+    zmin=-0.45, zmax=0.45,
+    labels=dict(color="Spearman ρ"),
+    title="The Full Correlation Map: External Variables vs. Flag Features",
+    aspect="auto",
+    width=850,
+    height=500,
+)
+fig.update_layout(
+    xaxis=dict(tickangle=45, tickfont=dict(size=9)),
+    yaxis=dict(tickfont=dict(size=10)),
+    margin=dict(l=120, r=20, t=50, b=100),
+)
+fig.show()
+```
+
+Three coherent structures jump out of the heatmap:
+
+1. **The latitude-temperature-wealth axis.** Absolute latitude, temperature (inverted), GDP per capita, and life expectancy all correlate with the same flag features in the same direction. This is the signature of the Global North vs. Global South divide: high-latitude, wealthy, long-lived nations favor white, blue, simple, vertically-striped flags; equatorial, poorer, shorter-lived nations favor yellow, green, complex, horizontally-striped designs. These four variables are so correlated with *each other* (latitude ↔ GDP: ρ ~ 0.55; GDP ↔ life expectancy: ρ ~ 0.85) that they form a single underlying dimension.
+
+2. **The colonial-size fingerprint.** Population shows the clearest pattern of any single variable: small territories use significantly more blue (ρ = -0.33) and more edge density (ρ = -0.31), while large nations use more red (ρ = +0.19) and more symmetry (ρ = +0.28). This reflects the blue-ensign inheritance of small British dependencies.
+
+3. **The null results.** Forest cover shows essentially zero correlation with green in the flag (ρ = -0.09, p = 0.20). Precipitation shows no correlation with palette complexity (ρ = 0.05, p = 0.44). Sunshine hours show no correlation with blue percentage (ρ = -0.01, p = 0.82). These are clean negative results, and they matter: flag colors are *symbolic*, not representational. A country does not put green on its flag because it has forests, or blue because it lacks sunshine.
+
+### The strongest signals: development and flag simplicity
+
+The single strongest correlations in our dataset involve **life expectancy** and **GDP per capita** versus the color green. Countries where people live longer use dramatically less green in their flags (ρ = -0.40, p < 0.001). This is the strongest individual correlation in the entire analysis.
+
+```{python}
+#| label: development-green-strip
+#| code-summary: "Strip plot: green percentage by development tier"
+
+# ---- Create development tiers for visualization ----
+v_dev = df_full.dropna(subset=["life_expectancy"]).copy()
+v_dev["dev_tier"] = pd.qcut(v_dev["life_expectancy"], q=4,
+    labels=["Bottom 25%\n(< 65 yr)", "25-50%\n(65-73 yr)",
+            "50-75%\n(73-78 yr)", "Top 25%\n(> 78 yr)"])
+
+fig = px.strip(
+    v_dev,
+    x="dev_tier",
+    y="green_pct",
+    hover_name="name",
+    color="region",
+    title="The Richer They Are, the Less Green They Fly (ρ = −0.40)",
+    labels={"dev_tier": "Life Expectancy Quartile", "green_pct": "Green %"},
+    width=750,
+    height=500,
+)
+fig.update_traces(marker=dict(size=7, opacity=0.7))
+fig.update_layout(legend_title_text="Region")
+fig.show()
+```
+
+The strip plot makes the pattern vivid. In the bottom quartile of life expectancy (mostly Sub-Saharan Africa), green percentages spread from 0 to 65%, with many flags using green as a primary color. In the top quartile (mostly Europe and East Asia), green is nearly absent. The mechanism is cultural, not biological: the green-heavy flag traditions (Pan-African, Pan-Arab, Islamic) belong to regions that happen to have lower life expectancy due to historical underdevelopment, not because of any property of the color green itself.
+
+The same pattern holds for GDP per capita versus green (ρ = -0.39), and a mirror-image pattern holds for white: wealthier nations use significantly more white (ρ = +0.28).
+
+```{python}
+#| label: development-bubble
+#| code-summary: "Bubble chart: GDP, life expectancy, green, and palette complexity"
+
+# ---- Bubble chart: multi-dimensional view ----
+v_bub = df_full.dropna(subset=["gdp_per_capita", "life_expectancy"]).copy()
+v_bub["log_gdp"] = np.log10(v_bub["gdp_per_capita"])
+
+fig = px.scatter(
+    v_bub,
+    x="log_gdp",
+    y="life_expectancy",
+    size="palette_complexity",
+    color="green_pct",
+    hover_name="name",
+    color_continuous_scale="Greens",
+    size_max=18,
+    title="Development, Complexity, and the Color Green",
+    labels={"log_gdp": "log₁₀(GDP per capita, USD)",
+            "life_expectancy": "Life Expectancy (years)",
+            "palette_complexity": "Palette Complexity",
+            "green_pct": "Green %"},
+    width=800,
+    height=550,
+)
+fig.update_layout(margin=dict(t=50, b=50))
+fig.show()
+```
+
+This bubble chart encodes four dimensions at once. Each flag is a circle whose position reflects its country's wealth (x) and longevity (y), whose size reflects how many colors the flag uses, and whose shade of green reflects how much green is in the flag. The result is striking: the lower-left corner (poor, short-lived) is full of large, dark-green bubbles; the upper-right (rich, long-lived) holds small, pale bubbles. Development *simplifies* flags and *drains their green*.
+
+### Solar Determinism: latitude shapes the palette
+
+The "Solar Determinism" hypothesis posits that proximity to the equator influences flag colors, specifically that tropical nations favor warm tones (yellow, green) and that polar nations favor cool, minimal designs. The data supports this, but moderately.
+
+```{python}
+#| label: solar-violin
+#| code-summary: "Violin plots: key color features by latitude band"
+
+# ---- Create latitude bands ----
+v_lat = df_full.dropna(subset=["abs_latitude"]).copy()
+v_lat["lat_band"] = pd.cut(v_lat["abs_latitude"],
+    bins=[0, 15, 30, 45, 90],
+    labels=["Tropical\n(0-15°)", "Subtropical\n(15-30°)",
+            "Temperate\n(30-45°)", "High latitude\n(45°+)"])
+
+# ---- Melt to long format for faceted violins ----
+solar_features = ["yellow_pct", "green_pct", "white_pct", "vertical_dominance"]
+v_long = v_lat.melt(
+    id_vars=["code", "name", "lat_band"],
+    value_vars=solar_features,
+    var_name="feature",
+    value_name="value",
+)
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+fig = make_subplots(rows=1, cols=4, subplot_titles=[
+    "Yellow %<br>(ρ = −0.30)", "Green %<br>(ρ = −0.29)",
+    "White %<br>(ρ = +0.24)", "Vertical Dominance<br>(ρ = +0.22)"])
+
+colors = ["#e6ab02", "#1b9e77", "#cccccc", "#7570b3"]
+for i, feat in enumerate(solar_features):
+    for j, band in enumerate(["Tropical\n(0-15°)", "Subtropical\n(15-30°)",
+                               "Temperate\n(30-45°)", "High latitude\n(45°+)"]):
+        vals = v_lat[v_lat["lat_band"] == band][feat].dropna()
+        fig.add_trace(go.Violin(
+            y=vals, name=band, line_color=colors[i],
+            box_visible=True, meanline_visible=True,
+            showlegend=False,
+        ), row=1, col=i+1)
+
+fig.update_layout(
+    title="Solar Determinism: How Latitude Shapes the Flag Palette",
+    height=450, width=900,
+    margin=dict(t=80, b=40),
+)
+fig.show()
+```
+
+The violin plots tell a more nuanced story than a simple scatter with a trendline. **Yellow** and **green** show a clear downward gradient from tropical to high-latitude bands, with the widest distributions in the tropics (some tropical flags use 50%+ green; others use none). **White** increases with latitude, though the effect is modest. **Vertical dominance** increases sharply in the temperate and high-latitude bands, reflecting the European tricolor tradition. These are real effects (all p < 0.001), but they are moderate in size (|ρ| ~ 0.22-0.30); latitude explains maybe 5-9% of the variance in any single color feature.
+
+### Inequality and flag complexity
+
+The Gini coefficient (income inequality) produces one of the more surprising results.
+
+```{python}
+#| label: gini-correlations-ext
+#| code-summary: "Spearman correlations: flag features vs. Gini coefficient"
+
+# ---- Features vs Gini (inequality) ----
+v3 = df_full.dropna(subset=["gini"])
+gini_rows = []
+for f in feature_cols:
+    rho, p = spearmanr(v3["gini"], v3[f])
+    gini_rows.append({"feature": f, "rho": round(rho, 3), "p_value": p, "abs_rho": abs(rho)})
+
+df_gini = (pd.DataFrame(gini_rows)
+           .sort_values("abs_rho", ascending=False)
+           .drop(columns="abs_rho")
+           .reset_index(drop=True))
+itshow(df_gini, pageLength=19)
+```
+
+Higher income inequality is associated with more palette complexity (ρ = +0.32, the strongest single Gini correlation), more yellow (ρ = +0.28), and more visual entropy (ρ = +0.27). In other words, more unequal societies fly more *complex* flags.
+
+```{python}
+#| label: gini-ridgeline
+#| code-summary: "Palette complexity by Gini tercile"
+
+# ---- Gini terciles ----
+v_gini = df_full.dropna(subset=["gini"]).copy()
+v_gini["gini_tier"] = pd.qcut(v_gini["gini"], q=3,
+    labels=["Low inequality\n(Gini < 33)", "Medium\n(33-40)", "High inequality\n(Gini > 40)"])
+
+fig = px.violin(
+    v_gini,
+    x="gini_tier",
+    y="palette_complexity",
+    color="gini_tier",
+    hover_name="name",
+    box=True,
+    points="all",
+    title="More Inequality, More Colors on the Flag (ρ = +0.32)",
+    labels={"gini_tier": "Income Inequality Tier", "palette_complexity": "Palette Complexity (distinct colors)"},
+    width=700,
+    height=500,
+)
+fig.update_layout(showlegend=False)
+fig.show()
+```
+
+The violin plot reveals that the shift is gradual but real. Low-inequality nations (mostly European) cluster around 3-4 colors; high-inequality nations (mostly African, Latin American) spread from 3 to 8 colors. The most likely explanation is a geographic confound: high-Gini countries tend to be post-colonial, tropical nations whose flag traditions (Pan-African, Pan-American) emphasize multi-color symbolism. But the effect holds within regions too, which suggests that the confound does not explain everything. Whether complex societies produce complex symbols, or whether this is pure coincidence mediated by colonial history, is a question we cannot answer with 250 data points.
+
+### Population and the colonial blue
+
+Population reveals the clearest non-geographic pattern.
+
+```{python}
+#| label: population-correlations-ext
+#| code-summary: "Spearman correlations: flag features vs. log(population)"
+
+# ---- Features vs log(population) ----
+v2 = df_full[df_full["population"] > 0].copy()
+v2["log_pop"] = np.log10(v2["population"])
+
+pop_rows = []
+for f in feature_cols:
+    rho, p = spearmanr(v2["log_pop"], v2[f])
+    pop_rows.append({"feature": f, "rho": round(rho, 3), "p_value": p, "abs_rho": abs(rho)})
+
+df_pop = (pd.DataFrame(pop_rows)
+          .sort_values("abs_rho", ascending=False)
+          .drop(columns="abs_rho")
+          .reset_index(drop=True))
+itshow(df_pop, pageLength=19)
+```
+
+Larger nations have less blue (ρ = -0.33), less edge density (ρ = -0.31), more symmetry (ρ = +0.28), and more red (ρ = +0.19). The blue-population link is the second strongest individual correlation in the entire analysis, and it has a simple explanation: small territories are disproportionately British dependencies that inherited complex blue-ensign flags, while large, independent nations designed their own, simpler, bolder symbols.
+
+```{python}
+#| label: population-blue-strip
+#| code-summary: "Strip plot: blue percentage by population quartile"
+
+# ---- Population quartiles ----
+v2["pop_tier"] = pd.qcut(v2["log_pop"], q=4,
+    labels=["Smallest 25%\n(< 30K)", "25-50%\n(30K-1M)",
+            "50-75%\n(1M-15M)", "Largest 25%\n(> 15M)"])
+
+fig = px.strip(
+    v2,
+    x="pop_tier",
+    y="blue_pct",
+    hover_name="name",
+    color="region",
+    title="Small Territories Fly Blue: Population vs. Blue % (ρ = −0.33)",
+    labels={"pop_tier": "Population Quartile", "blue_pct": "Blue %"},
+    width=750,
+    height=500,
+)
+fig.update_traces(marker=dict(size=7, opacity=0.7))
+fig.update_layout(legend_title_text="Region")
+fig.show()
+```
+
+The smallest population quartile is packed with Oceanian and Caribbean blue-ensign territories (Anguilla, Montserrat, Tuvalu, Cook Islands). The largest quartile holds the major nations: China, India, Indonesia, Brazil, Nigeria, none of which have significant blue in their flags. This is one of the clearest examples in the dataset of colonial history leaving a measurable trace in flag design.
+
+### The honest null results
+
+Not everything correlates with everything. Several hypotheses that *sound* plausible turn out to be completely unsupported by the data:
+
+```{python}
+#| label: null-results
+#| code-summary: "Confirmed null correlations"
+
+# ---- Test and display the nulls honestly ----
+null_tests = [
+    ("forest_pct", "green_pct", "Forest cover vs. green in flag"),
+    ("annual_precip_mm", "palette_complexity", "Precipitation vs. palette complexity"),
+    ("annual_sunshine_hrs", "blue_pct", "Sunshine hours vs. blue in flag"),
+    ("life_expectancy", "aggression_index", "Life expectancy vs. aggression index"),
+    ("avg_temp_c", "aggression_index", "Temperature vs. aggression index"),
+    ("avg_temp_c", "yellow_pct", "Temperature vs. yellow in flag"),
+]
+
+null_rows = []
+for ext, feat, label in null_tests:
+    v = df_full.dropna(subset=[ext])
+    rho, p = spearmanr(v[ext], v[feat])
+    null_rows.append({
+        "Hypothesis": label,
+        "ρ": round(rho, 3),
+        "p-value": round(p, 4),
+        "Verdict": "No correlation" if abs(rho) < 0.15 or p >= 0.01
+                   else "Weak" if abs(rho) < 0.20
+                   else "Moderate",
+    })
+
+df_null = pd.DataFrame(null_rows)
+itshow(df_null, pageLength=10)
+```
+
+These nulls are worth spelling out:
+
+- **Forest cover vs. green in the flag**: ρ = -0.09, p = 0.20. Brazil uses lots of green and has lots of forest; Saudi Arabia uses lots of green and has almost none. Flag green is about Islam, Pan-Africanism, and national ideology, not ecology.
+- **Precipitation vs. flag complexity**: ρ = 0.05, p = 0.44. Rainy countries do not have more colorful flags. Period.
+- **Sunshine vs. blue**: ρ = -0.01, p = 0.82. Completely flat. The "sunny countries avoid blue" story is a myth.
+- **Temperature vs. yellow**: ρ = +0.18, p = 0.004. Statistically significant but *weak*. The latitude version of this hypothesis (ρ = -0.30 for |latitude| vs yellow) is stronger, suggesting that the "solar" effect operates through geography and colonial history rather than through temperature directly.
+- **Life expectancy and temperature vs. aggression**: Both null (|ρ| ~ 0.11, p > 0.05). Hot countries do not have more aggressive flags. Long-lived countries do not have calmer flags. The aggression index does not correlate meaningfully with any external variable except population (ρ = +0.23).
+
+### Do clusters differ on climate and wealth?
+
+```{python}
+#| label: kruskal-external
+#| code-summary: "Kruskal-Wallis tests: cluster membership vs. external variables"
+
+# ---- Test whether clusters differ significantly on each external variable ----
+ext_kw_vars = ["avg_temp_c", "annual_precip_mm", "annual_sunshine_hrs",
+               "gdp_per_capita", "life_expectancy", "forest_pct"]
+
+kw_ext = []
+for var in ext_kw_vars:
+    valid = df_clust.dropna(subset=[var])
+    groups = [g[var].values for _, g in valid.groupby("cluster")]
+    groups = [g for g in groups if len(g) > 0]
+    if len(groups) > 1:
+        H, p = kruskal(*groups)
+        N, k = len(valid), len(groups)
+        eta_sq = (H - k + 1) / (N - k)
+        kw_ext.append({
+            "variable": var,
+            "H_statistic": round(H, 1),
+            "p_value": p,
+            "eta_squared": round(eta_sq, 3),
+            "significant": "Yes" if p < 0.01 else "No",
+        })
+
+df_kw_ext = pd.DataFrame(kw_ext).sort_values("eta_squared", ascending=False)
+itshow(df_kw_ext, pageLength=10)
+```
+
+```{python}
+#| label: cluster-temp-box
+#| code-summary: "Average temperature by cluster"
+
+fig = px.box(
+    df_clust.dropna(subset=["avg_temp_c"]),
+    x="cluster",
+    y="avg_temp_c",
+    color="cluster",
+    title="Temperature Distribution by Flag Cluster",
+    labels={"cluster": "Cluster", "avg_temp_c": "Average Temperature (°C)"},
+    width=850,
+    height=500,
+    category_orders={"cluster": sorted(df_clust["cluster"].unique())},
+)
+fig.update_layout(showlegend=False)
+fig.update_xaxes(type="category")
+fig.show()
+```
+
+```{python}
+#| label: cluster-gdp-box
+#| code-summary: "GDP per capita by cluster"
+
+fig = px.box(
+    df_clust.dropna(subset=["gdp_per_capita"]),
+    x="cluster",
+    y="gdp_per_capita",
+    color="cluster",
+    title="GDP per Capita by Flag Cluster",
+    labels={"cluster": "Cluster", "gdp_per_capita": "GDP per Capita (USD)"},
+    width=850,
+    height=500,
+    category_orders={"cluster": sorted(df_clust["cluster"].unique())},
+)
+fig.update_layout(showlegend=False)
+fig.update_xaxes(type="category")
+fig.show()
+```
+
+The cluster-level boxplots add texture to the feature-level correlations. Temperature varies dramatically across clusters: some clusters sit entirely in the tropics (medians above 25°C), while others are firmly temperate (medians below 15°C). GDP tells a similar story, with the widest spread in the blue-ensign cluster (which includes both wealthy Australia and tiny, impoverished dependencies). These differences confirm that flag design families are not random visual accidents; they are correlated with real-world geography and economics, mediated by the colonial and cultural forces that shaped both a nation's development and its flag.
+
+### Synthesis: what actually drives flag design?
+
+```{python}
+#| label: effect-size-summary
+#| code-summary: "Summary of all effect sizes: which external variable matters most?"
+
+# ---- Collect all Spearman correlations into a single summary ----
+all_corrs = []
+summary_vars = {
+    "abs_latitude": "Absolute Latitude",
+    "avg_temp_c": "Avg. Temperature",
+    "annual_precip_mm": "Annual Precipitation",
+    "annual_sunshine_hrs": "Sunshine Hours",
+    "gini": "Gini (Inequality)",
+    "gdp_per_capita": "GDP per Capita*",
+    "life_expectancy": "Life Expectancy",
+    "forest_pct": "Forest Cover",
+    "population": "Population*",
+    "area_km2": "Area*",
+}
+
+for var, label in summary_vars.items():
+    v = df_full.dropna(subset=[var]).copy()
+    if var in ["gdp_per_capita", "population", "area_km2"]:
+        v[var] = np.log10(v[var].clip(lower=1))
+    rhos = []
+    sig_count = 0
+    for f in feature_cols:
+        rho, p = spearmanr(v[var], v[f])
+        rhos.append(abs(rho))
+        if p < 0.01:
+            sig_count += 1
+    all_corrs.append({
+        "Variable": label,
+        "Mean |ρ|": round(np.mean(rhos), 3),
+        "Max |ρ|": round(np.max(rhos), 3),
+        "# significant (p<0.01)": sig_count,
+    })
+
+df_effects = pd.DataFrame(all_corrs).sort_values("Mean |ρ|", ascending=False)
+itshow(df_effects, pageLength=10)
+```
+
+```{python}
+#| label: effect-bar
+#| code-summary: "Bar chart: mean effect size by external variable"
+
+fig = px.bar(
+    df_effects.sort_values("Mean |ρ|"),
+    x="Mean |ρ|",
+    y="Variable",
+    orientation="h",
+    color="Max |ρ|",
+    color_continuous_scale="Viridis",
+    title="What Drives Flag Design? Effect Size by External Variable",
+    labels={"Mean |ρ|": "Mean |Spearman ρ| Across 19 Features", "Variable": ""},
+    width=750,
+    height=450,
+)
+fig.update_layout(margin=dict(l=140, r=20, t=50, b=50))
+fig.show()
+```
+
+The bar chart provides the final answer. **Life expectancy** and **GDP per capita** have the broadest influence across all 19 flag features, with mean |ρ| values above 0.15 and maximum individual correlations around 0.40. These are followed by **population** (driven by the colonial blue-ensign effect), **absolute latitude** (the solar determinism axis), and **Gini inequality** (flag complexity). At the bottom, **forest cover**, **precipitation**, and **area** show weak or null overall effects.
+
+The story these numbers tell is clear. Flag design is not random, but it is not directly driven by physical environment either. The strongest predictors are all *human* variables: how wealthy a country is, how long its people live, how many people it contains, and how unequal their society is. Geography matters too, but primarily as a proxy for colonial history and cultural tradition. A flag is a cultural artifact shaped by the same forces that shape nations themselves: latitude determines climate, climate influenced colonial expansion, colonial expansion determined political boundaries, and political boundaries determined which flag traditions each new nation inherited or invented. The 19 dimensions of a flag encode, in miniature, the entire trajectory of the nation behind it.
+
+## Conclusion {.unnumbered}
+
+We began with 250 rectangles of color and ended with a quantitative portrait of how nations represent themselves. The journey moved through three stages, each building on the last.
+
+**Stage 1: Feature extraction.** In [Part I](nootebook.html), we converted every flag into 19 numerical features across five families: color palette (8), color complexity (3), visual complexity (3), geometric structure (4), and aspect ratio (1). These features capture what a human can see at a glance, from the fraction of red pixels to the symmetry of the layout, and compress it into a form that algorithms can compare.
+
+**Stage 2: Structure discovery.** In this notebook, we computed pairwise distances between all 250 flags using both hand-crafted features and deep learning embeddings from ResNet-50. UMAP projected the resulting space into two dimensions, revealing a landscape where Pan-African tricolors cluster away from Nordic crosses, and the blue ensigns of former British territories form their own archipelago. HDBSCAN identified 12 stable clusters, with roughly 70% of flags assigned to a group and the remainder classified as noise, flags too unique to fit neatly into any family.
+
+**Stage 3: Hypothesis testing.** We tested whether the patterns in flag space reflect patterns in the real world. The answer is nuanced. The strongest signals are *human*: GDP per capita and life expectancy correlate with flag simplicity (ρ ≈ 0.30–0.40), and population size predicts the presence of blue through colonial inheritance. Latitude shapes the palette, with equatorial nations using more warm tones and higher latitudes favoring cooler designs, but the effect is moderate (ρ ≈ −0.30). Meanwhile, several intuitive hypotheses turned out to be null: forest cover does not predict green, precipitation does not predict complexity, and sunshine hours have essentially zero correlation with blue.
+
+### What we learned
+
+Three findings stand out:
+
+1. **Colonial history is the dominant structuring force.** Unsupervised clustering recovers the footprint of the British, French, and Spanish empires with no geographic input. The "Colonial Ghost" hypothesis is confirmed: flags inherit design traditions from their colonizers, and these traditions persist long after independence.
+
+2. **Wealth simplifies, inequality complicates.** Wealthier nations tend toward simpler, cooler flag designs, while more unequal societies use more colors and higher contrast. This mirrors a broader aesthetic pattern: the same minimalist impulse that drives modern corporate branding appears in the flags of developed nations.
+
+3. **Physical environment is a weak predictor.** Despite the romantic appeal of "solar determinism," the direct effect of climate on flag design is modest. Latitude matters, but primarily because it correlates with colonial history and development level. The causal chain runs through human institutions, not sunlight.
+
+### Limitations
+
+This analysis has clear boundaries. The 19 features, though diverse, are not exhaustive: they do not capture symbols (crescents, stars, coats of arms), text, or the semantic meaning of specific color choices. The deep learning embeddings partially compensate for this, but a dedicated symbol-detection pipeline would add a valuable dimension. The external metadata (GDP, Gini, life expectancy) are cross-sectional snapshots; flags, however, were designed at specific historical moments, and matching flag design to contemporary statistics introduces temporal mismatch. Finally, the sample of 250 flags, while comprehensive, is still small by machine learning standards, limiting the power of any individual statistical test.
+
+### Future directions
+
+Several extensions suggest themselves. A longitudinal study could track how flags change when regimes change, testing whether revolutions produce measurable shifts in design features. Symbol detection via object recognition models could add a sixth feature family. And a generative model, trained on the feature distributions of each cluster, could answer the ultimate question: *what would the flag of a country look like if all we knew was its latitude, GDP, and colonial history?*
+
+For now, the 19 dimensions are enough to show that flags are not arbitrary. They are data, compressed by history and encoded in cloth.
