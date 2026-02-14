@@ -38,7 +38,6 @@ The analysis proceeds in three stages:
 │   ├── extra_metadata.csv          # Climate + economic indicators (250 rows)
 │   ├── flags_svg/                  # 250 SVG flag files (not in repo)
 │   └── flags/                      # 250 PNG rasterized flags (not in repo)
-└── .gitignore
 ```
 
 The three `.qmd` files are [Quarto](https://quarto.org) documents that combine prose, code, and interactive Plotly visualizations. `computational_vexillology.qmd` is the complete analysis in a single document; `nootebook.qmd` and `analysis.qmd` are the original two-part versions.
