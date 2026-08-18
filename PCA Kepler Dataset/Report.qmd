@@ -88,12 +88,9 @@ Let's understand what we're measuring. Our 14 selected variables fall into four 
 - **koi_kepmag**: Kepler-band magnitude (brightness)
 
 ```{r load-data, message=FALSE, warning = FALSE}
-# Load the Kepler KOI dataset
-# Using a local copy to avoid network delays
-# df_koi <- read.csv("df_koi.csv")
-url_koi = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+*+from+q1_q17_dr25_koi&format=csv"
-
-df_koi = read_csv(url_koi, show_col_types = FALSE)
+# Load the versioned Kepler snapshot. Refreshing the NASA source is an explicit
+# maintenance step so rendered results stay reproducible.
+df_koi = read_csv("df_koi.csv", show_col_types = FALSE)
 
 # Select and rename columns for clarity
 df_selected <- df_koi %>%
@@ -686,7 +683,10 @@ cat("\nKruskal-Wallis Test - PC3 by Disposition:\n")
 print(pc3_test)
 ```
 
-**The Result:** P-values < 2.2e-16 and 4.933e-07(essentially zero). **This statistically PROVES that the groups have different medians in PC space.** The overlap we see is "noise," but the signal is real and highly significant.
+**The Result:** Small p-values provide evidence that score distributions differ
+in this sample. They do not quantify effect size, prove separability, or turn
+visual overlap into noise; interpretation therefore also reports plots and
+loading magnitudes.
 
 ---
 
@@ -725,7 +725,9 @@ print(loadings_arrow_plot)
 - **Top-right**: Stellar properties (`mass_sun`, `radius_sun`) point right (large stars)
 - **Top**: Orbital properties (`period_days`, `duration_hours`) point up (wide orbits)
 - **Bottom-left**: `insolation` points down-left (close, hot planets around small stars)
-- **The 90-degree angle** between stellar and orbital vectors proves they're **independent**—the PCA has successfully decoupled them
+- **The 90-degree angle** reflects PCA orthogonality. It shows zero linear
+  correlation of these score directions in this sample, not physical or
+  statistical independence.
 
 ---
 
@@ -853,7 +855,9 @@ knitr::kable(final_p_value_table, caption = "P-values from Kruskal-Wallis Tests 
 
 # Conclusion
 
-Through this analysis, we've transformed a high-dimensional, complex dataset into a **meaningful lower-dimensional space** where astrophysical concepts are clearly expressed:
+This exploratory analysis represents the versioned dataset in a lower-dimensional
+orthogonal space. Component labels are interpretations of loadings, not proven
+physical identities:
 
 1. **PC1 = Stellar Scale**: A spectrum from massive, hot stars to small, cool dwarfs
 2. **PC2 = Orbital Distance**: A spectrum from close-orbiting planets to distant, slow-moving worlds
@@ -864,9 +868,9 @@ Before PCA, we had 10 correlated variables describing exoplanet systems. Now we 
 
 - **Reduced dimensionality** from 10 to 4 (60% reduction)
 - **Explained +85% of variance** with just 4 components
-- **Decoupled independent phenomena** (stellar properties from orbital mechanics)
-- **Quantitatively validated** our components against domain knowledge
-- **Proven group separability**
+- **Constructed orthogonal components** under the PCA transformation
+- **Described associations** with labels derived from the input variables
+- **Reported distributional differences**, not a held-out separability result
 
 ---
 

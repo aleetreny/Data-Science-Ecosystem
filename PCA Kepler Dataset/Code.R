@@ -73,12 +73,10 @@ library(webshot2)
 # STEP 1: Load Dataset -----
 
 
-url_koi = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+*+from+q1_q17_dr25_koi&format=csv"
-
-df_koi = read_csv(url_koi, show_col_types = FALSE)
-
-# It case web goes slow, import data from the local copy
-#df_koi <- read.csv("df_koi.csv")
+# Use the versioned snapshot so every table, loading and plot is reproducible.
+# Refreshing from NASA is intentionally an explicit maintenance operation, not
+# an implicit dependency of the analysis.
+df_koi <- read_csv("df_koi.csv", show_col_types = FALSE)
 
 # Select and rename the relevant columns
 df_selected = df_koi %>%
@@ -593,15 +591,17 @@ print(pairs_plot_log)
 # choice for our dataset.
 #
 
-# Apply the scaling
-# We wrap in as.data.frame() because scale() returns a matrix.
-df_scaled <- as.data.frame(scale(df_log))
+# Apply the scaling to the same data used for the correlation diagnostics and
+# derived-label descriptions.  The log-transformed table above remains a
+# visualisation aid; silently changing the analysis population would make the
+# diagnostics and PCA answer different questions.
+df_scaled <- as.data.frame(scale(df_numeric_pca))
 
 # Note that R matrix is equal to the S of the X standardized
 # The substraction of the matrix gives the Zero Matriz
 S_matrix_tr <- cov(df_scaled)
-R_matrix_log <- cor(df_log)
-Zero_matrix <- round(S_matrix_tr - R_matrix_log,0) 
+R_matrix_scaled_input <- cor(df_numeric_pca)
+Zero_matrix <- round(S_matrix_tr - R_matrix_scaled_input, 0)
 
 # --- Verification of variances ---
 # Let's prove that our standardization worked.
@@ -842,22 +842,22 @@ variance_df <- data.frame(
 # --- Plot 1: Cattell's Scree Plot (Eigenvalues) ---
 # This plot shows the eigenvalues on the y-axis.
 scree_plot_annotated <- ggplot(variance_df, aes(x = Component, y = Eigenvalue, group = 1)) +
-  geom_line(color = "blue", size = 1) +
+  geom_line(color = "blue", linewidth = 1) +
   geom_point(color = "blue", size = 3) +
   
   # Add Kaiser's cutoff line (lambda = 1)
   geom_hline(yintercept = 1.0, linetype = "dashed", color = "red") +
-  geom_text(aes(x = 1, y = 1.0), label = "Kaiser's Cutoff (λ=1.0)", vjust = -0.5, hjust = 0, color = "red") +
+  annotate("text", x = 1, y = 1.0, label = "Kaiser's Cutoff (lambda = 1.0)", vjust = -0.5, hjust = 0, color = "red") +
   
   # Add Jolliffe's cutoff line (lambda = 0.7)
   geom_hline(yintercept = 0.7, linetype = "dotted", color = "darkgreen") +
-  geom_text(aes(x = 1, y = 0.7), label = "Jolliffe's Cutoff (λ=0.7)", vjust = -0.5, hjust = 0, color = "darkgreen") +
+  annotate("text", x = 1, y = 0.7, label = "Jolliffe's Cutoff (lambda = 0.7)", vjust = -0.5, hjust = 0, color = "darkgreen") +
   
   labs(
     title = "Scree Plot (Cattell's Criterion)",
     subtitle = "Eigenvalues per Component with Kaiser & Jolliffe Cutoffs",
     x = "Principal Component (1...p)",
-    y = "Eigenvalue (λ)"
+    y = "Eigenvalue (lambda)"
   ) +
   scale_x_continuous(breaks = 1:p) + # Ensure integer labels
   theme_minimal() +
@@ -870,12 +870,12 @@ print(scree_plot_annotated)
 # --- Plot 2: Cumulative Variance Plot (% Variability) ---
 cumulative_plot <- ggplot(variance_df, aes(x = Component, y = Variance, group = 1)) +
   geom_bar(stat = "identity", fill = "steelblue", alpha = 0.8) +
-  geom_line(aes(y = Cumulative), color = "red", size = 1) +
+  geom_line(aes(y = Cumulative), color = "red", linewidth = 1) +
   geom_point(aes(y = Cumulative), color = "red", size = 2) +
   
   # Add the 80% (or your preferred) threshold line
   geom_hline(yintercept = 0.8, linetype = "dashed", color = "black") +
-  geom_text(aes(x = 1, y = 0.8), label = "80% Cutoff", vjust = -0.5, hjust = 0, color = "black") +
+  annotate("text", x = 1, y = 0.8, label = "80% Cutoff", vjust = -0.5, hjust = 0, color = "black") +
   
   labs(
     title = "Cumulative Variance Plot",
@@ -1222,7 +1222,7 @@ plot_df$large_planet_label <- factor(plot_df$large_planet,
 faceted_density_planet <- ggplot(plot_df, aes(x = PC1, y = PC2)) +
   
   # Draw the 2D density contours
-  geom_density_2d(aes(color = ..level..)) +
+  geom_density_2d(aes(color = after_stat(level))) +
   
   # Create a separate plot for "Small" vs "Large" planets
   facet_wrap(~ large_planet_label) +
@@ -1245,7 +1245,7 @@ print(faceted_density_planet)
 faceted_density_insolation <- ggplot(plot_df, aes(x = PC1, y = PC2)) +
   
   # Draw the 2D density contours
-  geom_density_2d(aes(color = ..level..)) +
+  geom_density_2d(aes(color = after_stat(level))) +
   
   # Create three panels: "low", "medium", "high"
   facet_wrap(~ insolation_class) +
@@ -1472,51 +1472,35 @@ print(final_p_value_table)
 #
 # --- 18.1: Definitive Interpretation of P-Value Table ---
 #
-# This is a spectacular result and a resounding success.
+# These are descriptive associations, not an external validation of PCA.
 #
-# 1. **There is NO Ambiguity:** Every single p-value is
-#    astronomically small. This means the probability
-#    of seeing these separations *by chance* is zero.
-#    Except for magnitude_class in PC2. This perfectly
-#    alligns with our interpretation of PCs. 
+# 1. With this sample size, small p-values only reject equal score
+#    distributions. They do not quantify a useful effect size or prove
+#    separability, and the derived labels share input variables with PCA.
 #
-# 2. **PCA Successfully "Un-tangled" the Data:** The analysis proves
-#    that our PCA (a linear, unsupervised method)
-#    successfully "un-tangled" the 11 highly-correlated
-#    input variables into new, meaningful, independent components.
+# 2. PCA produces orthogonal score directions. Orthogonality and zero linear
+#    correlation do not establish statistical, causal or physical independence.
 #
-# 3. **ALL Derived Variables are Significant:**
-#    This is the key finding. Our *domain-specific*
-#    (e.g., 'large_planet') and *statistical*
-#    (e.g., 'magnitude_class') labels are ALL
-#    statistically separate in the new PCA space.
+# 3. The derived variables are useful interpretation aids, but are not held-out
+#    labels because they are constructed from PCA input variables.
 #
 #
 # --- 18.2: Final Project Conclusion ---
 #
-# Our analysis has been 100% successful, following a
-# rigorous, method-driven approach:
+# This analysis is an exploratory PCA of the versioned Kepler snapshot:
 #
-# 1. We PROVED the unstandardized Covariance matrix (S)
-#    was invalid due to massive variance disparity (Step 5).
+# 1. We use standardized variables so units and scales do not dominate PCA.
 #
-# 2. We PROVED PCA on the Correlation matrix (R) was
-#    justified due to high inter-correlation (Steps 6-8).
+# 2. Correlation diagnostics describe linear dependence in the analysis input.
 #
-# 3. We INTERPRETED the new components, identifying
-#    PC1 as the "Stellar Scale" (Step 11).
+# 3. Component interpretations are hypotheses based on loadings, not physical
+#    identities.
 #
-# 4. We DECIDED on a component cutoff (k=4 or 5)
-#    using multiple, robust criteria (Step 12).
+# 4. The component cutoff is a descriptive variance-retention choice.
 #
-# 5. We VISUALIZED the new PC space, using plots of
-#    increasing innovation (Steps 13-17) to confirm
-#    our interpretations.
+# 5. Visualisations and tests describe this sample; external labels are needed
+#    for predictive validation.
 #
-# 6. Finally, we STATISTICALLY PROVED (Step 18) that our
-#    new components have significant, measurable, and
-#    non-random relationships with all of our
-#    key domain-knowledge variables.
-#
-# The analysis is complete and successful.
+# 6. Derived labels are not used as independent proof because they reuse the
+#    original variables.
 #

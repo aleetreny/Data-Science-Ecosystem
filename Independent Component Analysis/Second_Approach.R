@@ -51,7 +51,14 @@ findOptimalProjections = function(image_path, nstart_kmeans = 5, niter_kmeans = 
   # 2.1: Reshape Data into a Matrix
   # We convert the 3D image array into a 2D matrix where each row is a pixel
   # and each column is a color channel (Red, Green, Blue).
-  Im_Matrix = matrix(Im, ncol = 3)
+  # R stores each channel as a contiguous slice of the 3D array.  Binding
+  # channel vectors explicitly is essential: matrix(Im, ncol = 3) groups
+  # neighbouring values within a channel instead of RGB values of one pixel.
+  Im_Matrix = cbind(
+    as.vector(Im[, , 1]),
+    as.vector(Im[, , 2]),
+    as.vector(Im[, , 3])
+  )
   
   # 2.2: Center the Data (Zero Mean)
   # The first step of whitening is to subtract the mean of each column

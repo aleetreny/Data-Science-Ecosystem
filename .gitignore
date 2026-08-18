@@ -1,0 +1,34 @@
+# Secrets and local environments
+.env
+.env.*
+.venv/
+venv/
+
+# Interpreter and notebook by-products
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Generated deployment artefacts and temporary renders
+parameters.h
+*.gif
+
+# Locally regenerated data, caches, and standalone render by-products
+**/data/
+*.h5
+*.pkl
+Rplots.pdf
+**/Rplots.pdf
+**/notebook_cache/
+**/*.rmarkdown
+**/optimization_results.png
+**/stego_image_result.png
+
+# These reports are reproducible from their sources but were not versioned
+# originally; keep the canonical notebook/QMD sources and their tracked assets.
+Classifying Dry Beans with Machine Learning/notebook.html
+PCA Kepler Dataset/Report.html
+PCA Kepler Dataset/Report.pdf
+PCA Kepler Dataset/Report_files/
+PCA Kepler Dataset/pca_3d_static.png
+PCA Kepler Dataset/temp_pca_3d.html

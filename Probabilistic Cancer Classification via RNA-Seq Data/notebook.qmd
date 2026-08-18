@@ -458,7 +458,10 @@ The PC3 vs PC4 plane reveals **additional class structure** not visible in the f
 
 # Model Training and Evaluation
 
-We now train the four probabilistic classifiers outlined in the introduction: **LDA**, **QDA**, **Naive Bayes**, and **Multinomial Logistic Regression**. All models are trained using **10-fold cross-validation on the training set only**. The PCA projection used here was also computed exclusively on the training data, ensuring a clean separation between fitting and evaluation.
+We now train the four probabilistic classifiers outlined in the introduction:
+**LDA**, **QDA**, **Naive Bayes**, and **Multinomial Logistic Regression**.
+PCA, centring and scaling are fitted independently inside every resampling fold;
+otherwise validation folds would influence their own feature representation.
 
 To understand how the number of principal components affects performance, we sweep over several values: 5, 10, 20, 50, 100, and 159 (the number needed to capture 80% of the training variance).
 
@@ -473,58 +476,85 @@ library(nnet)
 library(e1071)
 library(naivebayes)
 
-train_control <- trainControl(
-  method = "cv",
-  number = 10,
-  savePredictions = "final",
-  classProbs = TRUE
-)
-
 pc_counts <- c(5, 10, 20, 50, 100, 159)
+x_train <- train_data |>
+  dplyr::select(all_of(nonzero_var_genes))
+y_train <- train_data$Class
 
+# The x/y interface avoids expanding a 20k-gene formula.  To avoid fitting the
+# same PCA 22 times per fold, each fold fits the full 159-PC transformation once
+# on its analysis subset, then every classifier consumes the required prefix.
+# This preserves fold isolation: validation samples never affect centring,
+# scaling, zero-variance filtering, or PCA.
+set.seed(42)
+fold_indices <- createFolds(y_train, k = 10, returnTrain = FALSE)
+max_pcs <- max(pc_counts)
+
+fold_scores <- lapply(fold_indices, function(validation_idx) {
+  analysis_idx <- setdiff(seq_len(nrow(x_train)), validation_idx)
+  transformation <- preProcess(
+    x_train[analysis_idx, ],
+    method = c("zv", "center", "scale", "pca"),
+    pcaComp = max_pcs
+  )
+
+  list(
+    train_x = predict(transformation, x_train[analysis_idx, ])[, seq_len(max_pcs), drop = FALSE],
+    valid_x = predict(transformation, x_train[validation_idx, ])[, seq_len(max_pcs), drop = FALSE],
+    train_y = y_train[analysis_idx],
+    valid_y = y_train[validation_idx]
+  )
+})
+
+predict_fold <- function(model_name, fold, k) {
+  train_x <- fold$train_x[, seq_len(k), drop = FALSE]
+  valid_x <- fold$valid_x[, seq_len(k), drop = FALSE]
+
+  if (model_name == "LDA") {
+    predict(lda(x = train_x, grouping = fold$train_y), valid_x)$class
+  } else if (model_name == "QDA") {
+    predict(qda(x = train_x, grouping = fold$train_y), valid_x)$class
+  } else if (model_name == "Naive Bayes") {
+    fit <- naive_bayes(x = train_x, y = fold$train_y)
+    predict(fit, newdata = valid_x)
+  } else if (model_name == "Multinomial LogReg") {
+    set.seed(42)
+    train_md <- as.data.frame(train_x)
+    train_md$Class <- fold$train_y
+    fit <- multinom(Class ~ ., data = train_md, trace = FALSE, MaxNWts = 5000)
+    predict(fit, newdata = as.data.frame(valid_x))
+  } else {
+    stop("Unsupported model: ", model_name)
+  }
+}
+
+evaluate_configuration <- function(model_name, k) {
+  predictions <- unlist(lapply(fold_scores, predict_fold, model_name = model_name, k = k))
+  reference <- unlist(lapply(fold_scores, `[[`, "valid_y"))
+  comparison <- confusionMatrix(
+    factor(predictions, levels = levels(y_train)),
+    factor(reference, levels = levels(y_train))
+  )
+
+  tibble(
+    PCs = k,
+    Model = model_name,
+    Accuracy = unname(comparison$overall["Accuracy"]),
+    Kappa = unname(comparison$overall["Kappa"])
+  )
+}
+
+models_to_evaluate <- c("LDA", "Naive Bayes", "Multinomial LogReg")
 results_list <- list()
 
 for (k in pc_counts) {
-  # Use only training PCA scores
-  md <- as_tibble(pca_result$x[, 1:k]) |>
-    mutate(Class = train_data$Class)
-  
-  set.seed(42)
-  
-  # LDA
-  lda_fit <- train(Class ~ ., data = md, method = "lda", trControl = train_control)
-  
-  # Naive Bayes
-  nb_fit <- train(Class ~ ., data = md, method = "naive_bayes", trControl = train_control)
-  
-  # Multinomial Logistic Regression
-  multinom_fit <- train(Class ~ ., data = md, method = "multinom",
-                        trControl = train_control, trace = FALSE)
-  
-  results_list[[paste0(k, "_lda")]] <- tibble(
-    PCs = k, Model = "LDA",
-    Accuracy = lda_fit$results$Accuracy[1],
-    Kappa = lda_fit$results$Kappa[1]
-  )
-  results_list[[paste0(k, "_nb")]] <- tibble(
-    PCs = k, Model = "Naive Bayes",
-    Accuracy = max(nb_fit$results$Accuracy),
-    Kappa = max(nb_fit$results$Kappa)
-  )
-  results_list[[paste0(k, "_multinom")]] <- tibble(
-    PCs = k, Model = "Multinomial LogReg",
-    Accuracy = max(multinom_fit$results$Accuracy),
-    Kappa = max(multinom_fit$results$Kappa)
-  )
-  
-  # QDA only for k <= 50
+  for (model_name in models_to_evaluate) {
+    results_list[[paste(model_name, k, sep = "_")]] <- evaluate_configuration(model_name, k)
+  }
+
+  # QDA needs more samples per class than retained components.
   if (k <= 50) {
-    qda_fit <- train(Class ~ ., data = md, method = "qda", trControl = train_control)
-    results_list[[paste0(k, "_qda")]] <- tibble(
-      PCs = k, Model = "QDA",
-      Accuracy = qda_fit$results$Accuracy[1],
-      Kappa = qda_fit$results$Kappa[1]
-    )
+    results_list[[paste("QDA", k, sep = "_")]] <- evaluate_configuration("QDA", k)
   }
 }
 
@@ -567,13 +597,7 @@ results_all |>
   )
 ```
 
-Several key patterns emerge from the results:
-
--   **LDA** and **Multinomial Logistic Regression** are the top performers, both reaching 100% CV accuracy with 50 and 10 PCs respectively. LDA already exceeds 99% with just 10 components, and achieves a perfect score from 50 PCs onward.
--   **QDA** performs very well at low PC counts, peaking at 99.8% with 10 PCs, but is constrained by its inability to handle more than \~50 PCs (due to the small COAD class size). Within its feasible range, it is competitive with LDA.
--   **Naive Bayes** shows a counterintuitive pattern: its accuracy **decreases** as the number of PCs increases. With 10 PCs it achieves \~97.5%, but with 159 PCs it drops to \~81%. This is a textbook example of the "curse of dimensionality" for Naive Bayes, which assumes feature independence. As more components are added, finite-sample estimation introduces dependencies that violate this assumption, and the model degrades.
-
-The strong performance of LDA is noteworthy given that PCA already produces uncorrelated features with a shared coordinate system, which aligns well with LDA's assumption of a common covariance structure across classes.
+The table and curve above are the authoritative record for this execution. They compare model/PC configurations using only the training partition; the hold-out test set remains untouched until the next section. QDA is deliberately limited to 50 PCs because each class covariance estimate requires more observations than retained components. PCA produces orthogonal coordinates, which can improve numerical conditioning, but it does not itself prove that any model assumption is true.
 
 ## Per-Model Confusion Matrices (Test Set)
 
@@ -660,7 +684,7 @@ info$cm$table |>
   theme(legend.position = "none")
 ```
 
-LDA achieves **perfect classification** (100% accuracy) on the held-out test set with 50 PCs, correctly classifying all 159 test samples across all five tumor types. After PCA, the features are uncorrelated and share a common scale, which is exactly the scenario where LDA's assumption of equal covariance matrices holds best.
+The matrix and subtitle above report LDA's held-out result for the PC count selected by training-only cross-validation. Orthogonal PCA scores can improve numerical conditioning, but they do not by themselves establish LDA's equal-covariance assumption.
 
 ### QDA
 
@@ -684,7 +708,7 @@ info$cm$table |>
   theme(legend.position = "none")
 ```
 
-QDA, which allows each class to have its own covariance matrix, also achieves **100% accuracy** on the test set with just 10 PCs. Its flexibility provides no clear advantage over LDA in this dataset, suggesting that the class-conditional distributions in PC space share similar covariance structures. Notably, QDA reaches perfect classification with fewer components than LDA (10 vs. 50), which may reflect its ability to capture class-specific variance patterns in a compact feature space.
+QDA permits one covariance matrix per class. Its held-out result is shown above for the configuration selected without using the test set; comparison with LDA should be treated as empirical for this split rather than as evidence that either covariance assumption is universally correct.
 
 ### Naive Bayes
 
@@ -708,7 +732,7 @@ info$cm$table |>
   theme(legend.position = "none")
 ```
 
-Naive Bayes achieves **98.1% accuracy** on the test set at its optimal 10 PCs, misclassifying only 3 out of 159 samples. The confusion matrix shows that errors involve one COAD, one LUAD, and one PRAD sample being misclassified as BRCA. This is consistent with the PCA scatter plots, where BRCA's cloud partially overlaps with these classes in the first few principal components. KIRC, the most well-separated class, is classified perfectly.
+Naive Bayes' held-out errors and class-specific pattern are shown in the matrix above. Its conditional-independence assumption remains an approximation even when PCA scores are uncorrelated, so this model should be judged from its validation and test metrics rather than from the visualization alone.
 
 ### Multinomial Logistic Regression
 
@@ -732,7 +756,7 @@ info$cm$table |>
   theme(legend.position = "none")
 ```
 
-Multinomial Logistic Regression achieves **98.7% accuracy** on the test set with 10 PCs, misclassifying only 2 out of 159 samples: one BRCA predicted as LUAD and one LUAD predicted as BRCA. As a discriminative model (as opposed to the generative LDA), it directly estimates the decision boundaries between classes without making distributional assumptions. Its strong performance with just 10 components confirms that the PCA-reduced features provide excellent linear separability, though the slightly lower accuracy compared to LDA (which uses 50 PCs) reflects the trade-off between dimensionality and model complexity.
+Multinomial logistic regression directly estimates decision boundaries in the selected PCA space. The matrix above gives its current held-out result; it should be compared with the other methods using the same fixed test split, while recognising that a single split does not quantify deployment performance.
 
 ## Overall Best Model Selection
 
@@ -760,13 +784,13 @@ test_summary |>
   )
 ```
 
-The table above shows the **final, unbiased performance** of each model evaluated on data that was never seen during training or cross-validation. LDA and QDA both achieve perfect classification, while Multinomial Logistic Regression and Naive Bayes make only 2 and 3 errors respectively out of 159 test samples. These results are trustworthy because PCA was fitted exclusively on the training data and the test set was projected independently. In practice, **LDA** remains the recommended choice for its combination of perfect accuracy, simplicity, and interpretability.
+The table above reports one held-out evaluation for each model after selecting its PC count using training-only cross-validation. PCA for the final fits is trained exclusively on the training partition and then applied to the untouched test partition. These results are useful for this dataset and split, but a single hold-out does not by itself establish deployment performance; repeated external evaluation would be needed for that claim.
 
 ------------------------------------------------------------------------
 
 # Result Validation
 
-Achieving near-perfect accuracy can be a symptom of data leakage or other methodological errors. To confirm our results are legitimate, we run a series of sanity checks.
+Very high accuracy can be a symptom of data leakage or other methodological errors. The following checks assess selected leakage risks, but they do not replace repeated evaluation on an external cohort.
 
 ## Permutation Test
 
@@ -802,7 +826,7 @@ tibble(
   )
 ```
 
-With shuffled labels, LDA accuracy drops to approximately **29%**, close to the 20% expected by chance (the slight deviation is due to class imbalance). This confirms the model relies on the actual biological signal, not on artifacts or data leakage.
+The table contrasts the real-label result with a single shuffled-label sanity check. It is diagnostic rather than a formal permutation test: a formal test would repeat many permutations and report an empirical p-value.
 
 ## Degradation with Fewer Components
 
@@ -834,7 +858,7 @@ cm_2pc$table |>
   theme(legend.position = "none")
 ```
 
-With only 2 PCs, accuracy drops to **71.7%**. KIRC remains well-classified (clearly separated in PC1 vs PC2, as seen in the PCA scatter plot), but the other classes suffer significant confusion, particularly PRAD and LUAD. This gradual improvement from 2 PCs → 10 PCs → 50 PCs is exactly the behavior expected from a correctly functioning pipeline.
+The two-PC matrix provides a deliberately information-limited baseline. Any difference from the selected-PC result illustrates sensitivity to representation dimension; it is not, by itself, a proof of absence of leakage.
 
 ## Train/Test Integrity
 
@@ -848,8 +872,8 @@ train_ids <- train_data$sample_id
 test_ids  <- test_data$sample_id
 id_overlap <- length(intersect(train_ids, test_ids))
 
-# Check for exact duplicate rows (using first 100 genes for efficiency)
-check_genes <- nonzero_var_genes[1:100]
+# Check for exact duplicate rows across the full analysis feature space.
+check_genes <- nonzero_var_genes
 train_mat <- train_data |> dplyr::select(all_of(check_genes)) |> as.matrix()
 test_mat  <- test_data  |> dplyr::select(all_of(check_genes)) |> as.matrix()
 
@@ -884,13 +908,13 @@ The training and test sets are **completely disjoint**: zero sample ID overlap a
 
 ## Why Are These Results So High?
 
-The near-perfect accuracy is not an error; it reflects the **biological reality** of this dataset. The five cancer types originate from five fundamentally different organs (breast, kidney, colon, lung, prostate), each with a highly distinctive transcriptomic profile. We are not trying to distinguish subtle molecular subtypes within a single organ; we are classifying tissues that express entirely different gene programs. This is consistent with published results on this same PANCAN dataset from the UCI repository, where accuracies of 95-100% are routinely reported across a variety of classification methods.
+High scores can be plausible for this benchmark because the five labels arise from distinct tissues, but that explanation is a hypothesis about this dataset rather than a clinical-performance guarantee. The reported checks reduce common leakage risks; independent cohorts and repeated splits would be required to assess robustness.
 
 ------------------------------------------------------------------------
 
 # Conclusion
 
-This study demonstrates that **probabilistic classifiers combined with PCA** can achieve excellent classification of five cancer types (BRCA, KIRC, COAD, LUAD, PRAD) from high-dimensional RNA-Seq gene expression data. Using a proper train/test split with PCA fitted exclusively on training data, LDA and QDA achieve 100% accuracy on the held-out test set, while Multinomial Logistic Regression and Naive Bayes reach 98.7% and 98.1% respectively. As shown in the validation section, these results are not artifacts: they survive permutation testing, degrade appropriately with fewer components, and are consistent with published benchmarks on this dataset.
+This study evaluates probabilistic classifiers combined with PCA for five cancer types (BRCA, KIRC, COAD, LUAD and PRAD). The reported values in the generated tables use a train/test split, train-only PCA, and fold-isolated cross-validation for PC selection. They are evidence about this dataset and split, not proof of clinical generalisation.
 
 ## Key Findings
 
@@ -898,15 +922,15 @@ This study demonstrates that **probabilistic classifiers combined with PCA** can
 
 2.  **PCA is essential, not optional.** With $p = 20{,}531$ genes and only $n = 801$ samples, direct application of LDA, QDA, or logistic regression is mathematically impossible. PCA reduces the feature space while preserving the discriminative structure, as confirmed by the clear class separation visible in the first few principal components.
 
-3.  **LDA and QDA are the strongest classifiers**, both achieving 100% accuracy on the held-out test set. LDA reaches this with 50 PCs while QDA needs only 10, suggesting that class-specific covariance modelling helps in lower dimensions. LDA benefits from PCA's orthogonal features, which align perfectly with its equal-covariance assumption.
+3.  **Model ranking should follow the rendered training-CV and held-out tables.** PCA coordinates are orthogonal, but that property does not guarantee the covariance assumptions of LDA or QDA.
 
-4.  **Multinomial Logistic Regression** achieves 98.7% test accuracy with just 10 PCs, misclassifying only 2 of 159 samples (BRCA/LUAD confusion). As a discriminative model, it directly learns decision boundaries without distributional assumptions, confirming the strong linear separability of the PCA-reduced features.
+4.  **Multinomial Logistic Regression** is a discriminative comparison that learns decision boundaries in the selected PCA space; its current performance is displayed in the generated result tables.
 
-5.  **Naive Bayes degrades with more features**, providing a textbook illustration of the curse of dimensionality. Its best CV accuracy is 97.5% at 10 PCs, dropping to 81% at 159 PCs. On the test set it achieves 98.1% at its optimal configuration. Its independence assumption becomes increasingly violated as more components are added.
+5.  **Naive Bayes is evaluated across the same PC grid.** Its independence assumption is not guaranteed by PCA, so any trend with component count should be read from the current cross-validation curve rather than a fixed narrative value.
 
 6.  **The EDA was instrumental** in guiding modeling decisions. The bimodal expression distribution and the large number of zero-variance genes motivated the filtering step before PCA. The ANOVA analysis confirmed that individual genes carry strong tissue-specific signals, and the correlation heatmap justified the use of PCA to handle multicollinearity.
 
-7.  **The high accuracy is biologically grounded.** The permutation test, the graceful degradation with fewer PCs, and the complete disjointness of the train/test sets confirm that these results are legitimate. The five cancer types originate from five distinct organs with fundamentally different gene expression programs, making near-perfect classification an expected outcome, consistent with published literature on this PANCAN benchmark.
+7.  **The integrity checks are safeguards, not proof of generalisation.** The fold isolation, train/test disjointness and sanity checks reduce common leakage risks; an external cohort would still be required before making clinical-performance claims.
 
 ## Limitations and Future Work
 
@@ -980,7 +1004,7 @@ ggplot(umap_train_df, aes(x = UMAP1, y = UMAP2, color = Class)) +
   theme_minimal()
 ```
 
-The UMAP embedding reveals **five distinct clusters**, each corresponding to a cancer type. KIRC forms a tight, isolated cluster (sd \< 0.8 on both axes) far from all other classes. COAD and PRAD also form compact, well-separated groups. BRCA, the largest class (240 training samples), occupies a broader region in the center of the embedding, reflecting its higher internal variability. LUAD sits nearby, and the edges of the BRCA and LUAD clusters come very close (minimum distance \~0.04 between their nearest points), although their centers are well separated (\~10.6 units apart). Compared to the PCA projection, where BRCA, COAD, and LUAD overlapped substantially in 2D, UMAP successfully resolves them into distinguishable regions.
+This UMAP plot is an exploratory visualization of the training data. It can suggest local neighbourhood structure, but its axes and global distances should not be used as quantitative evidence of class separation or classifier performance.
 
 ## UMAP: Test Set Projection
 
@@ -1006,7 +1030,7 @@ ggplot() +
   theme_minimal()
 ```
 
-The test samples (bold triangles) land within or very near the training clusters (faded circles) of their respective cancer types. Out of 159 test samples, only 3 have a nearest training neighbor from a different class in UMAP space, and these are located at the edges where BRCA and LUAD nearly touch. This provides a strong visual confirmation that the held-out test data shares the same manifold structure as the training data, and that the near-perfect classification accuracy is geometrically justified.
+The overlay shows how this split projects into the UMAP fitted on the training partition. It is a visual diagnostic only: proximity in a UMAP embedding is not an independent validation of the classifiers or a measure of generalisation.
 
 ## UMAP by Individual Class
 
@@ -1059,7 +1083,7 @@ ggplot(umap_train_df, aes(x = UMAP1, y = UMAP2, color = Class)) +
   theme_minimal()
 ```
 
-The density contours confirm that each cancer type forms a **unimodal, well-concentrated region**. KIRC, COAD, and PRAD show tight, concentric contours reflecting their compact clusters. BRCA displays the widest contours, consistent with its larger spread and sample count. The contour lines of BRCA and LUAD may approach each other at the boundary between these two classes, reflecting the small gap (\~0.04 units) between their closest points. Despite this, the density peaks are well separated, reinforcing that the five cancer types occupy distinct regions of gene expression space.
+The contours summarize density in the two-dimensional visualization. They are descriptive; UMAP can distort global geometry, so this figure should not be treated as a statistical test of class separability.
 
 ## UMAP vs PCA: Side-by-Side Comparison
 

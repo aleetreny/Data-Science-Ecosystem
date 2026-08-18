@@ -1,7 +1,7 @@
 ---
 title: "Classifying Dry Beans with Machine Learning"
 subtitle: "A Comparative Study of KNN, SVM, Decision Trees & Neural Networks"
-jupyter: my_env
+jupyter: data-science-ecosystem
 format:
   html:
     theme: cosmo
@@ -220,7 +220,8 @@ Before fitting anything, consider the raw scale differences in the dataset:
 ```{python}
 #| label: knn-imports
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import (classification_report, confusion_matrix, accuracy_score)
@@ -270,28 +271,33 @@ print(f"  ShapeFactor1 (scaled): [{X_train_s[:, 12].min():.2f}, {X_train_s[:, 12
 
 ## Choosing k: the Bias-Variance Sweep
 
-There is no closed-form solution for the optimal *k*; we evaluate every integer from 1 to
-30 on the held-out test set and inspect the resulting bias-variance curve.
+There is no closed-form solution for the optimal *k*; we select it with
+stratified cross-validation on the training partition. The held-out test set is
+used only once, after the choice is frozen.
 
 ```{python}
 #| label: knn-k-sweep
 
 ks         = list(range(1, 31))
 train_accs = []
-test_accs  = []
+cv_accs    = []
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
 
 for k in ks:
     knn = KNeighborsClassifier(n_neighbors=k, metric='euclidean', n_jobs=-1)
     knn.fit(X_train_s, y_train)
     train_accs.append(accuracy_score(y_train, knn.predict(X_train_s)))
-    test_accs.append(accuracy_score(y_test,   knn.predict(X_test_s)))
+    cv_accs.append(cross_val_score(
+        Pipeline([('scale', StandardScaler()), ('model', knn)]),
+        X_train, y_train, cv=cv, scoring='accuracy', n_jobs=-1
+    ).mean())
 
-best_k   = ks[int(np.argmax(test_accs))]
-best_acc = max(test_accs)
+best_k   = ks[int(np.argmax(cv_accs))]
+best_acc = max(cv_accs)
 
-print(f"k=1   train={train_accs[0]:.4f}  test={test_accs[0]:.4f}  overfit gap={train_accs[0]-test_accs[0]:.4f}")
-print(f"Best  k={best_k}  ->  test accuracy={best_acc:.4f}")
-print(f"k=30  test={test_accs[-1]:.4f}")
+print(f"k=1   train={train_accs[0]:.4f}  CV={cv_accs[0]:.4f}  overfit gap={train_accs[0]-cv_accs[0]:.4f}")
+print(f"Best  k={best_k}  ->  CV accuracy={best_acc:.4f}")
+print(f"k=30  CV={cv_accs[-1]:.4f}")
 ```
 
 At *k*=1 the model memorises the training set perfectly (train accuracy 1.0000) but already
@@ -313,9 +319,9 @@ fig.add_trace(go.Scatter(
     hovertemplate='k=%{x}<br>Train acc=%{y:.4f}<extra></extra>'
 ))
 fig.add_trace(go.Scatter(
-    x=ks, y=test_accs, mode='lines+markers', name='Test accuracy',
+    x=ks, y=cv_accs, mode='lines+markers', name='CV accuracy',
     line=dict(color='#DD8452', width=2), marker=dict(size=5),
-    hovertemplate='k=%{x}<br>Test acc=%{y:.4f}<extra></extra>'
+    hovertemplate='k=%{x}<br>CV acc=%{y:.4f}<extra></extra>'
 ))
 fig.add_vline(x=best_k, line_dash='dash', line_color='#2ca02c',
               annotation_text=f'Best k={best_k}  ({best_acc:.4f})',
@@ -323,7 +329,7 @@ fig.add_vline(x=best_k, line_dash='dash', line_color='#2ca02c',
               annotation_font_color='#2ca02c')
 
 fig.update_layout(
-    title='KNN: Train vs. Test Accuracy across k values',
+    title='KNN: Train vs. Cross-Validation Accuracy across k values',
     xaxis_title='Number of Neighbours k',
     yaxis_title='Accuracy',
     yaxis_tickformat='.3f',
@@ -341,8 +347,10 @@ fig.show()
 knn_best = KNeighborsClassifier(n_neighbors=best_k, metric='euclidean', n_jobs=-1)
 knn_best.fit(X_train_s, y_train)
 y_pred_knn = knn_best.predict(X_test_s)
+knn_test_accuracy = accuracy_score(y_test, y_pred_knn)
+knn_macro_f1 = classification_report(y_test, y_pred_knn, output_dict=True)['macro avg']['f1-score']
 
-print(f"KNN (k={best_k}) — Test accuracy: {accuracy_score(y_test, y_pred_knn):.4f}\n")
+print(f"KNN (k={best_k}) — Test accuracy: {knn_test_accuracy:.4f}\n")
 print(classification_report(y_test, y_pred_knn,
                              target_names=CLASS_ORDER, digits=4))
 ```
@@ -548,8 +556,14 @@ for C in Cs:
     svm_r = SVC(kernel='rbf',    C=C, gamma='scale', random_state=SEED)
     svm_l.fit(X_train_s, y_train)
     svm_r.fit(X_train_s, y_train)
-    lin_accs.append(accuracy_score(y_test, svm_l.predict(X_test_s)))
-    rbf_accs.append(accuracy_score(y_test, svm_r.predict(X_test_s)))
+    lin_accs.append(cross_val_score(
+        Pipeline([('scale', StandardScaler()), ('model', svm_l)]),
+        X_train, y_train, cv=cv, scoring='accuracy', n_jobs=-1
+    ).mean())
+    rbf_accs.append(cross_val_score(
+        Pipeline([('scale', StandardScaler()), ('model', svm_r)]),
+        X_train, y_train, cv=cv, scoring='accuracy', n_jobs=-1
+    ).mean())
 
 best_C_lin = Cs[int(np.argmax(lin_accs))]
 best_C_rbf = Cs[int(np.argmax(rbf_accs))]
@@ -606,12 +620,16 @@ svm_rbf.fit(X_train_s, y_train)
 
 y_pred_lin = svm_lin.predict(X_test_s)
 y_pred_rbf = svm_rbf.predict(X_test_s)
+svm_lin_test_accuracy = accuracy_score(y_test, y_pred_lin)
+svm_rbf_test_accuracy = accuracy_score(y_test, y_pred_rbf)
+svm_lin_macro_f1 = classification_report(y_test, y_pred_lin, output_dict=True)['macro avg']['f1-score']
+svm_rbf_macro_f1 = classification_report(y_test, y_pred_rbf, output_dict=True)['macro avg']['f1-score']
 
-print(f"Linear SVM — Test accuracy : {accuracy_score(y_test, y_pred_lin):.4f}")
+print(f"Linear SVM — Test accuracy : {svm_lin_test_accuracy:.4f}")
 print(f"  Support vectors per class : {svm_lin.n_support_}")
 print(f"  Total support vectors     : {sum(svm_lin.n_support_)} / {X_train_s.shape[0]} training points ({sum(svm_lin.n_support_)/X_train_s.shape[0]:.1%})")
 print()
-print(f"RBF SVM    — Test accuracy : {accuracy_score(y_test, y_pred_rbf):.4f}")
+print(f"RBF SVM    — Test accuracy : {svm_rbf_test_accuracy:.4f}")
 print(f"  Support vectors per class : {svm_rbf.n_support_}")
 print(f"  Total support vectors     : {sum(svm_rbf.n_support_)} / {X_train_s.shape[0]} training points ({sum(svm_rbf.n_support_)/X_train_s.shape[0]:.1%})")
 ```
@@ -755,7 +773,7 @@ results = {
     'Support Vectors': [sum(svm_lin.n_support_), sum(svm_rbf.n_support_)]
 }
 print(pd.DataFrame(results).to_string(index=False))
-print(f"\nKNN reference accuracy (k={best_k}): 0.9207")
+print(f"\nKNN reference accuracy (k={best_k}): {knn_test_accuracy:.4f}")
 ```
 
 Both SVM variants improve modestly over KNN (0.9232 and 0.9262 vs 0.9207). The RBF
@@ -828,7 +846,7 @@ for d in depths:
     dt = DecisionTreeClassifier(max_depth=d, random_state=SEED)
     dt.fit(X_train, y_train)
     dt_train.append(accuracy_score(y_train, dt.predict(X_train)))
-    dt_test.append(accuracy_score(y_test,  dt.predict(X_test)))
+    dt_test.append(cross_val_score(dt, X_train, y_train, cv=cv, scoring='accuracy', n_jobs=-1).mean())
 
 best_depth = depths[int(np.argmax(dt_test))]
 print(f"depth=1   test={dt_test[0]:.4f}  (near-chance: single split)")
@@ -881,10 +899,12 @@ At `depth=20` the train/test gap opens to about 0.10, a sign of overfitting.
 dt_best = DecisionTreeClassifier(max_depth=best_depth, random_state=SEED)
 dt_best.fit(X_train, y_train)
 y_pred_dt = dt_best.predict(X_test)
+dt_test_accuracy = accuracy_score(y_test, y_pred_dt)
+dt_macro_f1 = classification_report(y_test, y_pred_dt, output_dict=True)['macro avg']['f1-score']
 
 print(f"Decision Tree (max_depth={best_depth})")
 print(f"  Leaves     : {dt_best.get_n_leaves()}")
-print(f"  Test acc   : {accuracy_score(y_test, y_pred_dt):.4f}\n")
+print(f"  Test acc   : {dt_test_accuracy:.4f}\n")
 print(classification_report(y_test, y_pred_dt, target_names=CLASS_ORDER, digits=4))
 ```
 
@@ -916,7 +936,7 @@ plot_tree(
     label='root'
 )
 ax_t.set_title(
-    f'Decision Tree Structure  |  max\_depth=4  |  {dt_vis.get_n_leaves()} leaves  |  '
+    f'Decision Tree Structure  |  max_depth=4  |  {dt_vis.get_n_leaves()} leaves  |  '
     f'test acc: {accuracy_score(y_test, dt_vis.predict(X_test)):.4f}',
     fontsize=12, pad=10, fontweight='bold'
 )
@@ -957,13 +977,11 @@ rf_accs      = []
 
 for n in n_trees_list:
     rf = RandomForestClassifier(n_estimators=n, random_state=SEED, n_jobs=-1)
-    rf.fit(X_train, y_train)
-    rf_accs.append(accuracy_score(y_test, rf.predict(X_test)))
-    print(f"n_estimators={n:3d}  test_acc={rf_accs[-1]:.4f}")
+    rf_accs.append(cross_val_score(rf, X_train, y_train, cv=cv, scoring='accuracy', n_jobs=-1).mean())
+    print(f"n_estimators={n:3d}  cv_acc={rf_accs[-1]:.4f}")
 
 best_n = n_trees_list[int(np.argmax(rf_accs))]
 print(f"\nBest n_estimators={best_n}  ->  {max(rf_accs):.4f}")
-best_n = 200  # plateau reached; prose uses 200 trees as final model
 ```
 
 ```{python}
@@ -1005,10 +1023,12 @@ rf_best = RandomForestClassifier(n_estimators=best_n, oob_score=True,
                                   random_state=SEED, n_jobs=-1)
 rf_best.fit(X_train, y_train)
 y_pred_rf = rf_best.predict(X_test)
+rf_test_accuracy = accuracy_score(y_test, y_pred_rf)
+rf_macro_f1 = classification_report(y_test, y_pred_rf, output_dict=True)['macro avg']['f1-score']
 
 print(f"Random Forest (n={best_n})")
 print(f"  OOB score  : {rf_best.oob_score_:.4f}  (free validation estimate from bootstrap)")
-print(f"  Test acc   : {accuracy_score(y_test, y_pred_rf):.4f}\n")
+print(f"  Test acc   : {rf_test_accuracy:.4f}\n")
 print(classification_report(y_test, y_pred_rf, target_names=CLASS_ORDER, digits=4))
 ```
 
@@ -1153,13 +1173,13 @@ print("Method                   Test Acc   Macro F1")
 print("-" * 46)
 rep_dt = classification_report(y_test, y_pred_dt, output_dict=True)
 rep_rf = classification_report(y_test, y_pred_rf, output_dict=True)
-print(f"Decision Tree (d={best_depth})       {accuracy_score(y_test, y_pred_dt):.4f}     {rep_dt['macro avg']['f1-score']:.4f}")
-print(f"Random Forest (n={best_n})       {accuracy_score(y_test, y_pred_rf):.4f}     {rep_rf['macro avg']['f1-score']:.4f}")
+print(f"Decision Tree (d={best_depth})       {dt_test_accuracy:.4f}     {dt_macro_f1:.4f}")
+print(f"Random Forest (n={best_n})       {rf_test_accuracy:.4f}     {rf_macro_f1:.4f}")
 print()
 print("Reference:")
-print(f"KNN (k=30)               0.9207     0.9328")
-print(f"Linear SVM (C=5)         0.9232     0.9344")
-print(f"RBF SVM (C=50)           0.9262     0.9376")
+print(f"KNN (k={best_k})               {knn_test_accuracy:.4f}     {knn_macro_f1:.4f}")
+print(f"Linear SVM (C={best_C_lin})         {svm_lin_test_accuracy:.4f}     {svm_lin_macro_f1:.4f}")
+print(f"RBF SVM (C={best_C_rbf})           {svm_rbf_test_accuracy:.4f}     {svm_rbf_macro_f1:.4f}")
 ```
 
 The single tree at **0.9056** is the weakest method so far, sitting below every other
@@ -1258,10 +1278,14 @@ for name, layers in configs.items():
     mlp = MLPClassifier(hidden_layer_sizes=layers, activation='relu', solver='adam',
                         max_iter=400, random_state=SEED, early_stopping=True,
                         validation_fraction=0.1, n_iter_no_change=15, alpha=1e-4)
+    acc = cross_val_score(
+        Pipeline([('scale', StandardScaler()), ('model', mlp)]),
+        X_train, y_train, cv=cv, scoring='accuracy', n_jobs=-1
+    ).mean()
+    # Fit once on the full training set only to report convergence diagnostics.
     mlp.fit(X_train_s, y_train)
-    acc = accuracy_score(y_test, mlp.predict(X_test_s))
     arch_names.append(name); arch_accs.append(acc); arch_iters.append(mlp.n_iter_)
-    print(f"{name:35s}  iters={mlp.n_iter_:3d}  test_acc={acc:.4f}")
+    print(f"{name:35s}  iters={mlp.n_iter_:3d}  cv_acc={acc:.4f}")
 
 best_idx    = int(np.argmax(arch_accs))
 best_name   = arch_names[best_idx]
@@ -1271,9 +1295,9 @@ print(f"\nBest architecture : {best_name}  ({arch_accs[best_idx]:.4f})")
 
 ```{python}
 #| label: fig-nn-arch-sweep
-#| fig-cap: "Test accuracy and convergence epochs for each MLP architecture. The Shallow model converges in the most iterations because its limited capacity forces slower gradient updates; deeper models converge faster but do not necessarily generalise better on this dataset."
+#| fig-cap: "Cross-validation accuracy and convergence epochs for each MLP architecture. The held-out test set is not used to choose the architecture."
 
-fig = make_subplots(1, 2, subplot_titles=['Test Accuracy by Architecture',
+fig = make_subplots(1, 2, subplot_titles=['CV Accuracy by Architecture',
                                            'Iterations to Convergence'])
 colors = PALETTE[:len(arch_names)]
 
@@ -1330,11 +1354,12 @@ mlp_best.fit(X_train_s, y_train)
 
 y_pred_enc = mlp_best.predict(X_test_s)
 y_pred_nn  = le.inverse_transform(y_pred_enc)
+mlp_test_accuracy = accuracy_score(y_test_str, y_pred_nn)
 
 print(f"Architecture  : {best_name}  {best_layers}")
 print(f"Iterations    : {mlp_best.n_iter_}")
 print(f"Best val score: {mlp_best.best_validation_score_:.4f}")
-print(f"Test accuracy : {accuracy_score(y_test_str, y_pred_nn):.4f}\n")
+print(f"Test accuracy : {mlp_test_accuracy:.4f}\n")
 print(classification_report(y_test_str, y_pred_nn, target_names=CLASS_ORDER, digits=4))
 ```
 
@@ -1434,12 +1459,13 @@ fig.show()
 
 ```{python}
 #| label: fig-final-comparison
-#| fig-cap: "Test accuracy of all six methods. The single Decision Tree is the weakest at 0.9056. KNN, Linear SVM, RBF SVM, and MLP cluster between 0.921 and 0.928; the Random Forest sits at 0.9221. The tight spread across all competitive methods (about 0.008 points) reflects the irreducible SIRA/DERMASON overlap."
+#| fig-cap: "Held-out test accuracy of all methods after hyperparameter selection on training-fold cross-validation. Regenerate this figure rather than using archived numerical output."
 
-methods = ['Decision Tree\n(d=10)', 'KNN\n(k=30)', 'Random Forest\n(n=200)',
-           'Linear SVM\n(C=5)', 'RBF SVM\n(C=50)', 'MLP\n(256-128-64-32)']
-accs    = [0.9056, 0.9207, 0.9221, 0.9232, 0.9262,
-           round(accuracy_score(y_test_str, y_pred_nn), 4)]
+methods = [f'Decision Tree\\n(d={best_depth})', f'KNN\\n(k={best_k})',
+           f'Random Forest\\n(n={best_n})', f'Linear SVM\\n(C={best_C_lin})',
+           f'RBF SVM\\n(C={best_C_rbf})', f'MLP\\n({best_name})']
+accs    = [dt_test_accuracy, knn_test_accuracy, rf_test_accuracy,
+           svm_lin_test_accuracy, svm_rbf_test_accuracy, mlp_test_accuracy]
 colors  = ['#c44e52','#4C72B0','#55A868','#8172B2','#937860','#64B5CD']
 
 fig = go.Figure(go.Bar(
@@ -1450,7 +1476,7 @@ fig = go.Figure(go.Bar(
 fig.add_hline(y=min(accs), line_dash='dot', line_color='#aaa', opacity=0.6)
 fig.update_layout(
     title=dict(text='Test Accuracy: All Methods Compared', x=0.5, xanchor='center'),
-    yaxis=dict(range=[0.885, 0.940], tickformat='.4f', title='Test Accuracy'),
+    yaxis=dict(range=[max(0, min(accs) - 0.02), min(1, max(accs) + 0.02)], tickformat='.4f', title='Test Accuracy'),
     xaxis_title='Method',
     template='plotly_white', height=440,
     margin=dict(t=60, b=10)
@@ -1464,11 +1490,12 @@ fig.show()
 summary_df = pd.DataFrame({
     'Method'         : ['Decision Tree', 'KNN', 'Random Forest',
                         'Linear SVM', 'RBF SVM', 'MLP'],
-    'Key Hyperpar.'  : ['max_depth=10', 'k=30', 'n=200, oob=0.9255',
-                        'C=5', 'C=50, gamma=scale', '256-128-64-32'],
-    'Test Accuracy'  : [0.9056, 0.9207, 0.9221, 0.9232, 0.9262,
-                        round(accuracy_score(y_test_str, y_pred_nn), 4)],
-    'Macro F1'       : [0.9203, 0.9328, 0.9343, 0.9344, 0.9376,
+    'Key Hyperpar.'  : [f'max_depth={best_depth}', f'k={best_k}', f'n={best_n}, oob={rf_best.oob_score_:.4f}',
+                        f'C={best_C_lin}', f'C={best_C_rbf}, gamma=scale', best_name],
+    'Test Accuracy'  : [dt_test_accuracy, knn_test_accuracy, rf_test_accuracy,
+                        svm_lin_test_accuracy, svm_rbf_test_accuracy, mlp_test_accuracy],
+    'Macro F1'       : [dt_macro_f1, knn_macro_f1, rf_macro_f1,
+                        svm_lin_macro_f1, svm_rbf_macro_f1,
                         round(__import__('sklearn.metrics', fromlist=['f1_score'])
                               .f1_score(y_test_str, y_pred_nn, average='macro'), 4)],
     'Scales?'        : ['No', 'Yes', 'No', 'Yes', 'Yes', 'Yes'],
@@ -1580,22 +1607,21 @@ print(f"Unique y_test classes: {sorted(y_test_shap.unique().tolist())}")
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 
-# Re-train the best RF from the Random Forest section (n=200, same split).
+# Re-train the CV-selected RF from the Random Forest section on the same split.
 # Decision trees are scale-invariant, so we train on the original (unscaled) features
 # exactly as in §4, ensuring the model and its predictions are identical.
 rf_shap = RandomForestClassifier(
-    n_estimators=200, random_state=SEED, n_jobs=-1, oob_score=True
+    n_estimators=best_n, random_state=SEED, n_jobs=-1, oob_score=True
 )
 rf_shap.fit(X_train_shap, y_train_shap)
 
 y_pred_rf_shap = rf_shap.predict(X_test_shap)
-print(f"Random Forest (n=200) — Test accuracy : {accuracy_score(y_test_shap, y_pred_rf_shap):.4f}")
+print(f"Random Forest (n={best_n}) — Test accuracy : {accuracy_score(y_test_shap, y_pred_rf_shap):.4f}")
 print(f"OOB score              : {rf_shap.oob_score_:.4f}")
 ```
 
-The test accuracy and OOB score printed above should match the values obtained in the
-Random Forest section (acc 0.9221, OOB 0.9255), confirming we are explaining the same
-model trained on the same unscaled features and split.
+The test accuracy and OOB score should match the values obtained in the Random Forest
+section, confirming that SHAP explains the same CV-selected model and split.
 
 ## Computing SHAP Values
 

@@ -1,7 +1,10 @@
 # Spotify Audio Analytics: Evolution & Prediction
 
 ## Overview
-This repository contains a comprehensive Data Science study on the evolution of music over the last century using Spotify's audio features. The project is divided into two main components: an **Exploratory Data Analysis (EDA)** on how music production has changed, and a **Machine Learning** system capable of predicting a song's release decade based solely on its audio signal.
+This repository contains two exploratory projects: an EDA based on playlist,
+metadata and derived lyric features, and a decade-classification notebook based
+on a separately acquired Spotify/Kaggle dataset. It does not currently extract
+or analyse Spotify audio features in the EDA notebook.
 
 ## Repository Structure
 
@@ -36,10 +39,10 @@ To visualize and understand the historical trends in music production and compos
 
 This notebook explores questions such as:
 
-  * **The Loudness War:** Visualizing the steady increase in volume mastering over the decades.
-  * **Technological Shifts:** Tracking the decline of `acousticness` and the rise of `energy` and electronic elements.
-  * **Rhythmic Changes:** How `danceability` and `tempo` have fluctuated through different musical eras.
-  * **Song Duration:** Analyzing the rise of long cuts in the 70s/80s and the return to shorter formats in the streaming era.
+  * Playlist decade labels, album year and remaster/reissue discrepancies.
+  * Metadata such as duration, popularity, explicit status and genre.
+  * Derived lexical and sentiment metrics. Raw lyrics are deliberately not
+    redistributed; API credentials are read from environment variables.
 
 -----
 
@@ -85,7 +88,10 @@ The projects are built using **Python** and the following data science libraries
 
 1.  Clone this repository.
 2.  Navigate to the desired folder (`music_evolution` or `predict_decades`).
-3.  Ensure the `.csv` datasets listed in the structure above are present in the folder.
+3.  Set `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` and `GENIUS_TOKEN` in the
+    environment only when API enrichment is required. Do not save credentials
+    in a notebook or dataset. The decade-prediction source CSV is not bundled;
+    obtain and version it separately before executing that notebook.
 4.  Launch Jupyter Notebook:
     ```bash
     jupyter notebook

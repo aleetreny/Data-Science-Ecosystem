@@ -6,9 +6,7 @@
 
 This project explores **Neuroevolution** (Genetic Algorithms) as an alternative to standard Reinforcement Learning (DQN, PPO) for solving continuous state-space control problems.
 
-Using the `LunarLander-v3` environment, we demonstrate that a simple Multi-Layer Perceptron (MLP) can be trained to near-perfect performance **without calculating a single gradient (Backpropagation)**. The project is structured as a scientific experiment, creating a narrative that moves from a naive evolutionary approach to a robust, multi-stage optimization pipeline.
-
-**Final Result:** The agent achieved a robust average score of **288.94** (Theoretical max is ~300), with a 0% crash rate on unseen seeds.
+Using the `LunarLander-v3` environment, the notebook explores how a simple Multi-Layer Perceptron (MLP) can be optimized without backpropagation. The rendered numerical results are exploratory outputs, not a benchmark: a reproducible claim requires fixed package versions, deterministic evaluation seeds, an untouched test-seed set, repeated runs and uncertainty intervals.
 
 ---
 
@@ -49,16 +47,16 @@ This project implements a unique 4-phase training pipeline designed to overcome 
 
 ---
 
-## Key Results & Findings
+## Exploratory results
 
 ### 1. Performance Comparison
-The transition from Phase 1 to Phase 4 highlights the difference between memorization and true learning.
+The transition between phases illustrates a possible optimization trajectory. It must not be read as evidence of generalization until it is re-evaluated on a locked set of unseen seeds over multiple independent training runs.
 
 | Metric | Phase 1 (Naive) | Phase 4 (Final) | Improvement |
 | :--- | :--- | :--- | :--- |
-| **Best Score** | 267.31 (Unstable) | **288.94 (Robust)** | +8% |
-| **Success Rate** | 1.0% | **100%** | +9900% |
-| **Crash Rate** | 76.0% | **0.0%** | Solved |
+| **Best Score** | Archived notebook output | Archived notebook output | Requires repeated evaluation |
+| **Success Rate** | Archived notebook output | Archived notebook output | Requires a locked test-seed set |
+| **Crash Rate** | Archived notebook output | Archived notebook output | Requires confidence intervals |
 
 ### 2. The Geometry of Learning (t-SNE)
 We visualized the high-dimensional evolutionary history ($\mathbb{R}^{836} \to \mathbb{R}^2$) using t-SNE. The plot reveals a distinct **"V-Shape" trajectory**:
@@ -67,4 +65,4 @@ We visualized the high-dimensional evolutionary history ($\mathbb{R}^{836} \to \
 * **Convergence:** The trajectory ends in a dense cluster, indicating high genetic specialization.
 
 ### 3. Conclusion
-We successfully solved a continuous control problem with a sparse reward signal without using Backpropagation. This highlights the potential of Evolutionary Strategies for tasks where the reward function is non-differentiable or sparse, provided that strict **Monte Carlo Validation** is used to prevent environmental overfitting.
+The experiment motivates further evaluation of evolutionary strategies on sparse or non-differentiable rewards. It does not establish that the task has been solved; validation must isolate selection from evaluation and report the distribution across seeds.

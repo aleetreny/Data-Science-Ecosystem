@@ -4,21 +4,28 @@
 
 ![R](https://img.shields.io/badge/R-4.0%2B-blue)
 ![Tidyverse](https://img.shields.io/badge/Main_Lib-Tidyverse-orange)
-![Status](https://img.shields.io/badge/Status-Completed-green)
+![Status](https://img.shields.io/badge/Status-Exploratory-blue)
 
 ## About the Project
 
 This project uses data science to analyze the underlying mechanics of Monopoly (Classic Madrid Edition).
 
-Using R, I have modeled the physical and economic rules of the game to simulate **2,000,000 rolls**. The goal is not just to calculate probabilities, but to understand capital efficiency and develop a data-driven winning strategy, answering questions such as: Which streets are the most profitable? How many houses should I build to maximize return?
+Using R, this project simulates **2,000,000 rolls** of a simplified Madrid
+edition ruleset, including a jail state. It is an exploratory probability and
+cash-flow study rather than a full multiplayer Monopoly simulator.
 
 ## Key Findings
 
 The data yielded by the simulation reveals clear patterns:
 
-1.  **The Orange Dominance:** Due to the high frequency of exiting Jail, the Orange group (Felipe II, Velázquez, Serrano) is statistically the most visited zone on the board. It offers the best cost-benefit ratio.
-2.  **The 3-House Strategy:** ROI analysis indicates that the third house represents the investment "sweet spot." Beyond this point, the marginal return decreases while the risk of illiquidity increases.
-3.  **Speed vs. Strength:** Although the Green group collects higher rents, the Orange group causes bankruptcies faster due to its hit frequency. In a competitive match, the speed of return is key.
+1.  **Landing frequencies:** The simulation estimates visit frequencies under
+    the documented ruleset; results depend on the rules and random seed.
+2.  **Marginal payback:** The construction chart compares incremental cost and
+    expected incremental rent. It does not establish a universal optimal house
+    count because it omits ownership, house supply and opponents.
+3.  **Illustrative survival scenario:** The cash-flow scenario uses independent
+    landings and fixed development phases, so it is not a proof of a winning
+    multiplayer strategy.
 
 ## Generated Visualizations
 

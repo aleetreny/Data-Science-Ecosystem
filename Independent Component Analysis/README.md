@@ -1,10 +1,16 @@
-# Melanoma Image Segmentation using ICA and Orthogonal Projections
+# Image Segmentation with Fisher Projection Pursuit and Orthogonal Projections
 
 ## Overview
 
-This repository contains two complementary R projects that implement **Independent Component Analysis (ICA)** and **orthogonal projections** to segment dermatological images, specifically melanoma lesions from healthy skin. Both projects apply the concept of finding optimal linear subspaces that maximize class separability using the **Fisher Index** as the optimization criterion.
+This repository contains two complementary R projects that implement **Fisher
+projection pursuit** and **orthogonal projections** on a dermatological image.
+They seek directions whose one-dimensional projections are bimodal according to
+the Fisher Index; they do not estimate statistically independent components or
+provide a clinical melanoma classifier.
 
-The primary goal is to identify projections in the whitened RGB color space that best distinguish between two classes (melanoma vs. non-melanoma tissue) by maximizing bimodality in the projected data.
+The primary goal is to explore unsupervised colour partitions in a whitened RGB
+space. Interpreting a partition as lesion versus skin requires annotated masks
+and external validation, neither of which is included here.
 
 ---
 
@@ -23,7 +29,8 @@ The first project implements a straightforward, loop-based approach to discover 
   - Projecting whitened data onto the direction vector
   - Clustering projected 1D data into two groups using k-means
   - Computing the Fisher Index: $FI = \frac{(\mu_1 - \mu_2)^2}{\sigma_1^2 + \sigma_2^2}$
-- **Orthogonal Component Discovery**: Sequentially finds IC2 (orthogonal to IC1) and IC3 (orthogonal to both IC1 and IC2)
+- **Orthogonal Projection Discovery**: Sequentially finds two orthogonal
+  Fisher-optimal directions and their orthogonal complement
 - **Visualization**: Generates histograms, segmentation masks, grayscale projections, and 3D optimization surfaces
 
 ### Workflow
@@ -277,9 +284,10 @@ image(ic1, main = "First Independent Component", col = grey.colors(256))
 
 ### Projection Images
 
-Each of the three orthogonal projections reveals different aspects of the melanoma lesion:
+Each of the three orthogonal projections reveals different colour-contrast
+structures in the image:
 
-- **IC1**: Typically the strongest discriminator between melanoma and skin
+- **Projection 1**: The strongest bimodal colour projection in this image
 - **IC2**: Captures secondary structural variations orthogonal to IC1
 - **IC3**: Orthogonal complement, completes the 3D basis
 
@@ -289,7 +297,8 @@ The 3D surface plot (Project 1) shows how the Fisher Index varies across all sph
 
 ### Segmentation Masks
 
-Binary masks show the result of k-means clustering on each projection, where pixels are classified as either melanoma or healthy skin.
+Binary masks show the result of unsupervised k-means clustering on each
+projection. Cluster labels do not have clinical meaning without ground truth.
 
 ---
 

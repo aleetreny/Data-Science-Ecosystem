@@ -16,3 +16,9 @@ This repository documents my journey in applied data science, showcasing hands-o
 ## Technologies
 
 Python • R • SQL • Jupyter Notebooks • Git • LaTeX
+
+## Reproducibility
+
+See [RUNNING.md](RUNNING.md) for the tested Python environment, the R/Quarto
+execution commands, verification steps, and the small number of projects that
+require local datasets, a solver licence, or private API credentials.

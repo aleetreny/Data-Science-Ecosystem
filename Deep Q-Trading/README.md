@@ -4,7 +4,9 @@
 
 This project explores the application of **Deep Reinforcement Learning (DRL)** to financial markets, specifically Bitcoin (BTC/USD) trading. Unlike traditional algorithmic trading strategies that rely on hard-coded heuristics (e.g., "buy if RSI < 30"), this project trains an autonomous agent to discover its own optimal strategy solely through trial and error.
 
-Using the **Deep Q-Network (DQN)** architecture, the agent learns to navigate the non-stationary and adversarial environment of cryptocurrency markets, achieving a performance that significantly outperforms the "Buy & Hold" benchmark on unseen data.
+Using the **Deep Q-Network (DQN)** architecture, the project explores a
+non-stationary cryptocurrency environment. It is a research prototype, not an
+investment strategy or evidence of outperformance.
 
 ## The Challenge: Non-Stationarity
 
@@ -36,23 +38,28 @@ We utilize a value-based method where a Neural Network approximates the Q-Functi
 ### 3. Validation Strategy (The "Time-Travel" Test)
 To strictly prevent overfitting (look-ahead bias), the dataset is split chronologically:
 * **Training Set (In-Sample):** 2015 – 2020. The agent learns from this historical data.
-* **Testing Set (Out-of-Sample):** 2021 – 2024. The agent is evaluated on this unseen future data, which includes the 2021 Bull Run and the 2022 Crypto Winter.
+* **Testing Set (Out-of-Sample):** 2021 through the final downloaded bar. The
+  exact end date is recorded by the notebook at runtime rather than inferred
+  from the calendar year.
 
 ## Results
 
-The model was evaluated against the standard market benchmark: the **Buy & Hold** strategy (buying BTC on day 1 of the test set and holding until the end).
-
-| Metric | Buy & Hold Strategy | Deep Q-Trading Agent | Difference |
-| :--- | :--- | :--- | :--- |
-| **Total Profit** | $12,891.04 | **$68,876.06** | **+434.29%** |
-| **Activity** | Passive (1 Trade) | Active (52.1% Long / 47.9% Short) | High Frequency |
+The historical notebook output compared environment reward with a price change.
+Those are different quantities in `gym-anytrading`, so its dollar figures and
+percentage uplift are not a valid strategy comparison. A valid evaluation must
+use final portfolio value/return in the same units for agent and buy-and-hold,
+with transaction costs, slippage, drawdown and walk-forward splits.
 
 ### Key Findings
-1.  **Alpha Generation:** The agent successfully extracted "Alpha" (excess return) from the market volatility. While the market provided a base return of ~$12k, the agent generated an additional ~$56k through active trading.
-2.  **Regime Adaptation:** The agent maintained profitability during the 2022 market crash, demonstrating that it learned to profit from downward trends (Shorting) rather than just riding upward momentum.
-3.  **Active Management:** The buy/sell ratio (approx. 50/50) indicates the agent did not degenerate into a trivial "Always Buy" policy, but actively managed its exposure.
+1.  **Prototype behaviour:** Action frequencies only show that the trained policy
+    selected both actions in this environment; they do not establish profitable
+    shorting.
+2.  **Evaluation requirement:** Claims of alpha or regime adaptation require
+    identical net-return accounting and repeated, chronologically separated
+    walk-forward tests.
+3.  **Risk requirement:** Report costs, slippage, maximum drawdown and
+    uncertainty across seeds before drawing financial conclusions.
 
 *Note: Due to floating-point arithmetic differences between CPU and GPU architectures, exact profit figures may vary slightly across different hardware, but the general performance trend is consistent.*
 
 **Author:** Alejandro Treny Ortega
-

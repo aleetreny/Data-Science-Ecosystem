@@ -1,14 +1,14 @@
 # The Silicon Neuron: Extreme-Scale Anomaly Detection on FPGAs
 
-![Python](https://img.shields.io/badge/python-3.10%2B-blue) ![TensorFlow](https://img.shields.io/badge/tensorflow-2.16%2B-orange)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue) ![TensorFlow](https://img.shields.io/badge/tensorflow-2.16%2B-orange) ![Status](https://img.shields.io/badge/status-research_prototype-blue)
 
-> **Context:** A sensor-to-silicon pipeline designed for the **High-Luminosity LHC (HL-LHC) Level-1 Trigger**, capable of detecting New Physics anomalies within strictly bounded microsecond latency.
+> **Context:** A research prototype that explores an autoencoder and low-precision arithmetic on simulated jet data. It is not a validated Level-1 Trigger implementation.
 
 ## Executive Summary
 
 The HL-LHC upgrade will increase collision rates to **40 MHz**, generating over **1 Petabyte of data per second**. Standard hardware triggers rely on hard-coded physics rules, potentially discarding evidence of unforeseen physics (Dark Matter, Long-Lived Particles).
 
-This project implements a **Deep Autoencoder** deployed on an FPGA architecture. Unlike standard implementations, this project features a **Custom 6-bit Quantization Engine** built from scratch in TensorFlow, demonstrating that deep learning can meet the extreme bandwidth and latency constraints of high-energy physics experiments without sacrificing accuracy.
+This project implements a **Deep Autoencoder** and a custom TensorFlow quantization experiment. The notebook is useful for studying the trade-off between reconstruction quality and reduced precision; FPGA synthesis, resource use, timing and physics performance must be measured independently before making deployment claims.
 
 ------------------------------------------------------------------------
 
@@ -20,7 +20,7 @@ At the LHC, we cannot save every collision. We must filter 40,000,000 events dow
 
 ### Simulation (Monte Carlo)
 
-To validate the model, I built a high-fidelity "Digital Twin" simulation: 
+The notebook uses a deliberately simplified simulated sample:
 * **Background:** QCD Dijets modeled with diffuse radiation patterns.
 * **Signal:** Boosted $W'$ bosons decaying into collimated 3-prong substructures.
 
@@ -47,30 +47,24 @@ Standard libraries (like QKeras) often face compatibility issues with modern Ten
 * **Range:** $[-32, 31]$ integer mapping.
 * **Constraint:** Zero-dependency implementation.
 
-### 4. Firmware Generation
+### 4. Firmware Export Prototype
 
-The project includes an automated Python-to-C++ transpiler that generates a **Synthesizable HLS Header (`parameters.h`)**. This file contains the quantized weights and architecture definitions ready for Xilinx Vivado HLS.
+The project includes an experimental Python-to-C++ exporter for a `parameters.h` header. Exporting weights is not equivalent to a synthesizable or timing-closed firmware design; the generated header must be compiled and synthesized with the exact target configuration.
 
 ------------------------------------------------------------------------
 
-## Performance Results
+## Validation status
 
-The move from 32-bit Floating Point to 6-bit Integer resulted in a **5.3x memory compression** with **zero degradation** in physics performance.
+The figures in this repository are exploratory notebook outputs, not reproducible hardware benchmarks. In particular, the original comparison did not include a synthesis report, a target FPGA, fixed-point equivalence tests, a held-out physics sample, or uncertainty estimates. The only claims this repository supports are that the notebook defines a quantized-model experiment and an export prototype.
 
-| Metric | Float32 Baseline | Int6 Hardware Model | Impact |
-|:-----------------|:-----------------|:-----------------|:-----------------|
-| **Precision** | 32-bit Float | **6-bit Fixed** | **81% Bandwidth Reduction** |
-| **ROC AUC** | 0.9588 | **0.9651** | **Robust to Quantization** |
-| **Latency** | \~ms (CPU) | **\< 1** $\mu s$ (FPGA est.) | **L1 Trigger Ready** |
-
-![ROC Curve](roc_curve.png) *(Red line: 6-bit Quantized Model. Grey line: Float32 Baseline. Overlap indicates successful quantization.)*
+![ROC Curve](roc_curve.png) *(Archived exploratory plot. It must be regenerated on a held-out sample and paired with synthesis results before it is used as a performance claim.)*
 
 ------------------------------------------------------------------------
 
 ## Future Roadmap (CERN)
 
 If integrated into the CERN computing infrastructure, the following steps are proposed: 
-1. **Hardware-in-the-Loop:** Synthesize the C++ firmware on a physical **Xilinx Virtex UltraScale+** to measure nanosecond-level latency and power draw.
+1. **Hardware-in-the-Loop:** Compile and synthesize the exported design for a named target, then record timing, DSP/BRAM/LUT use, power and numerical equivalence.
 2. **Pruning:** Implement unstructured pruning to reduce DSP usage by an estimated 40%.
 3. **Graph Neural Networks:** Adapt the quantization engine for GNNs to better capture the non-Euclidean geometry of particle detectors.
 

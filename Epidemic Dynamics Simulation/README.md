@@ -16,6 +16,10 @@ The simulation models a city grid where agents interact with their neighbors to 
 * **SZR Dynamics:** Tracks three states: Susceptible (Humans), Infected (Zombies), and Removed (Dead).
 * **Advanced Analytics:** Includes logarithmic scale population charts, radial spatial analysis to measure the "Bunker Effect," and multi-variable scatter plots to analyze survival factors.
 
+## Interpretation limits
+
+The two models are exploratory scenarios, not matched counterfactual experiments: they change several mechanisms simultaneously. Their outcomes should therefore not be interpreted as a causal estimate of the benefit of any single intervention. The notebook now uses one seeded generator and independent random draws for infection, combat and decay; rerun it with repeated seeds and one-factor-at-a-time scenarios before comparing policies.
+
 ## Technologies Used
 
 * **Python 3.x**

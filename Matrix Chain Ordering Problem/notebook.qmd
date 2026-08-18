@@ -728,8 +728,8 @@ using namespace Rcpp;
 arma::mat execute_rpn(const List& matrices, const IntegerVector& rpn) {
   int n = matrices.size();
   
-  // --- Zero-copy pre-conversion ---
-  // Build lightweight arma::mat wrappers that REUSE R's memory.
+  // --- R-memory wrappers for input conversion ---
+  // Build lightweight arma::mat wrappers that initially reuse R's memory.
   // The constructor mat(ptr, n_rows, n_cols, copy_aux_mem=false, strict=true)
   // points Armadillo directly at R's column-major SEXP buffer,
   // avoiding the deep copy that as<arma::mat>() would perform.
@@ -746,26 +746,34 @@ arma::mat execute_rpn(const List& matrices, const IntegerVector& rpn) {
   
   for (int t = 0; t < rpn.size(); t++) {
     int token = rpn[t];
-    if (token >= 0) {
+    if (token > 0) {
+      if (token > n) stop("RPN matrix index is out of range");
       // Positive: push a COPY of the wrapper (cheap: the input matrices
       // must not be modified, so we copy once here; intermediates are
       // then moved, not copied, for the rest of the computation).
       stk.push(mats[token - 1]);
-    } else {
+    } else if (token == -1) {
+      if (stk.size() < 2) stop("Malformed RPN: multiplication needs two matrices");
       // -1: pop two, multiply, push result
       arma::mat right = std::move(stk.top()); stk.pop();
       arma::mat left  = std::move(stk.top()); stk.pop();
       stk.push(left * right);
+    } else {
+      stop("Malformed RPN token");
     }
   }
-  
+
+  if (stk.size() != 1) stop("Malformed RPN: expected one final matrix");
   return stk.top();
 }
 ```
 
 A few things worth noting about this implementation:
 
-1. **Zero-copy input conversion**: a naive approach would call `as<arma::mat>(matrices[token - 1])` inside the token loop, which performs a **deep copy** on every push. For a 500 MB matrix, that would double memory usage and turn the benchmark into a memory-bandwidth test rather than a computation test. Instead, we pre-convert all matrices into lightweight `arma::mat` wrappers using Armadillo's advanced constructor with `copy_aux_mem = false`. These wrappers point directly at R's column-major SEXP memory, eliminating the R-to-C++ transfer overhead entirely.
+1. **Input conversion**: the initial wrappers use R's column-major memory and
+avoid repeated `as<arma::mat>()` conversion. The stack still owns working
+copies when it evaluates a plan, so this is not an end-to-end zero-copy
+executor; memory claims should be verified with profiling.
 2. **`std::move(stk.top())`**: when we pop a matrix from the stack, we use move semantics instead of copying. For an $800 \times 900$ intermediate, this means transferring a pointer (8 bytes) instead of copying 5.7 MB of data.
 3. **`const List&`**: the input list is passed by reference, so the R matrices are not copied when entering the C++ function.
 4. **Token-driven loop**: the function does not know or care what the "optimal" ordering is. It simply follows instructions. This is what makes it generic: any valid RPN vector produces the correct result.
@@ -923,9 +931,13 @@ This is the same dependency pattern we will later exploit for parallelization: e
 #| label: task4-dp-r
 
 mcm_dp_r <- function(dims) {
+  if (length(dims) < 2L || any(!is.finite(dims)) || any(dims <= 0)) {
+    stop("dims must contain at least two positive finite dimensions")
+  }
   n <- length(dims) - 1
   m <- matrix(0, nrow = n, ncol = n)
   s <- matrix(0L, nrow = n, ncol = n)
+  if (n == 1L) return(list(cost = m, splits = s, objective_value = 0))
   
   # Fill the DP tables by diagonal: short chains first, long chains later.
   for (len in 2:n) {
@@ -1168,12 +1180,12 @@ List mcm_dp_resource_aware(const IntegerVector& dims,
                        * tier_penalty(left_bytes)
                        * tier_penalty(right_bytes);
         
-        // Fixed SIMD overhead: each matrix multiply pays a constant cost
-        // for the BLAS dgemm call setup, register spills, and poor
-        // vectorization on tiny operands. This teaches the optimizer
-        // to prefer fewer, larger multiplications over many tiny ones.
+        // Small products have a disproportionately large setup cost.  Unlike
+        // a constant term, this dimension-dependent penalty can affect the
+        // selected parenthesization.
+        double small_product_penalty = simd_overhead * (1.0 + 1e6 / std::max(flops, 1.0));
         double cost = m[i * n + k] + m[(k + 1) * n + j]
-                    + flops * penalty + simd_overhead;
+                    + flops * penalty + small_product_penalty;
         if (cost < best) {
           best = cost;
           best_k = k;
@@ -1200,7 +1212,11 @@ A few implementation notes:
 - **Flat arrays**: all three variants store the $m$ and $s$ tables as `std::vector<double>` indexed by `i * n + j` rather than nested vectors or Armadillo matrices. This gives contiguous memory layout and better cache behavior during the triple-nested-loop traversal. The cost entries use `double` (safe up to $2^{53}$), and all dimension products are explicitly cast to `double` before multiplication to avoid `int32` overflow when dimensions exceed ~46,000.
 - **Iterative RPN reconstruction**: instead of the textbook recursive approach, we use an explicit `std::stack<Frame>` that simulates post-order traversal iteratively. Recursive reconstruction consumes one call-stack frame per level of the expression tree; for chains of $n > 10{,}000$ matrices (common in auto-generated genomic or simulation pipelines), this would exhaust the OS call stack (~8 MB on Linux/macOS) and segfault. The iterative version moves this bookkeeping to heap-allocated memory, which is effectively unlimited.
 - **`#pragma omp parallel for`**: the parallel variant annotates the loop over starting index `i` for each chain length `len`. Since all cells on the same diagonal are independent, this is safe without any synchronization. I use `schedule(static)` because every cell on a given diagonal performs the same number of split evaluations. The `min_cells_parallel` guard avoids paying thread-management overhead on tiny diagonals, while still allowing the report to exercise the real threaded path on medium-sized chains.
-- **Two-tier cache penalty + SIMD overhead**: the resource-aware variant uses a **step function** with two tiers (L2 at 256 KB, penalty 1.5x; L3 at 8 MB, penalty 3x), plus a **fixed per-multiplication overhead** (`simd_overhead`, default 500 pseudo-FLOPs). The tiered penalty models memory hierarchy effects following the IO-complexity framework of Hong & Kung (1981). The SIMD overhead term models a different physical reality: on modern CPUs with AVX2/AVX-512, very small matrix multiplications (e.g., $4 \times 4$) underutilize the vector registers and pay a disproportionate cost for the BLAS `dgemm` call setup, pipeline flush, and register spills. Adding a constant per split teaches the optimizer to prefer fewer, larger multiplications over many tiny ones, which is exactly how BLAS performs best.
+- **Two-tier cache penalty + small-product heuristic**: the resource-aware
+  variant uses configurable L2/L3 thresholds plus a dimension-dependent
+  penalty for tiny products. It is a hardware-sensitive heuristic, not a
+  calibrated performance model; benchmarked execution time is the criterion
+  for accepting a selected plan.
 
 ### Parallel configuration in this render
 

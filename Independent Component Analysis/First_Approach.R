@@ -54,6 +54,7 @@ Im_R_Matrix_W = Im_R_Matrix_Centered %*% W
 cat("Starting sequential computation for the first component...\n")
 
 n_clusters = 2
+set.seed(42)
 theta_seq = 1:360 # Azimuthal angle
 phi_seq = 1:180   # Polar angle
 

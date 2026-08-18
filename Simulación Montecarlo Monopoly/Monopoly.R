@@ -207,6 +207,8 @@ simular_monopoly <- function(n_turnos) {
 
   posicion <- 1
   conteo_dobles <- 0
+  encarcelado <- FALSE
+  turnos_carcel <- 0
   historial <- numeric(40) # Vector para el recuento absoluto de caídas
 
   for (i in 1:n_turnos) {
@@ -216,6 +218,20 @@ simular_monopoly <- function(n_turnos) {
     d2 <- sample(1:6, 1)
     suma <- d1 + d2
     es_doble <- (d1 == d2)
+
+    # Jail is a state, not merely square 11. A prisoner leaves by rolling
+    # doubles or after the third failed attempt, then moves with that roll.
+    if (encarcelado) {
+      if (es_doble || turnos_carcel == 2) {
+        encarcelado <- FALSE
+        turnos_carcel <- 0
+        conteo_dobles <- 0
+      } else {
+        turnos_carcel <- turnos_carcel + 1
+        historial[11] <- historial[11] + 1
+        next
+      }
+    }
 
     # Regla de velocidad (3 dobles consecutivos)
     if (es_doble) {
@@ -227,6 +243,8 @@ simular_monopoly <- function(n_turnos) {
     if (conteo_dobles == 3) {
       posicion <- 11 # Encarcelamiento inmediato
       conteo_dobles <- 0
+      encarcelado <- TRUE
+      turnos_carcel <- 0
       historial[posicion] <- historial[posicion] + 1
       next
     }
@@ -243,6 +261,8 @@ simular_monopoly <- function(n_turnos) {
       # Casilla 31: Ir a la Cárcel
       if (posicion == 31) {
         posicion <- 11
+        encarcelado <- TRUE
+        turnos_carcel <- 0
         ficha_estable <- TRUE
       }
       # Casillas de Suerte (8, 23, 37)
@@ -250,6 +270,10 @@ simular_monopoly <- function(n_turnos) {
         nueva_pos <- procesar_suerte(posicion)
         if (nueva_pos != posicion) {
           posicion <- nueva_pos
+          if (posicion == 11) {
+            encarcelado <- TRUE
+            turnos_carcel <- 0
+          }
           ficha_estable <- FALSE
         }
       }
@@ -258,6 +282,10 @@ simular_monopoly <- function(n_turnos) {
         nueva_pos <- procesar_caja(posicion)
         if (nueva_pos != posicion) {
           posicion <- nueva_pos
+          if (posicion == 11) {
+            encarcelado <- TRUE
+            turnos_carcel <- 0
+          }
           ficha_estable <- FALSE
         }
       }
@@ -430,8 +458,14 @@ datos_casas <- tablero_resultados %>%
       nivel_casa == "alq_hotel" ~ 5
     ),
     inversion_acumulada = precio_compra + (num_casas * precio_edificar),
-    retorno_esperado = alquiler * (probabilidad / 100),
-    turnos_recuperacion = ifelse(retorno_esperado > 0, inversion_acumulada / retorno_esperado, NA)
+    retorno_esperado = alquiler * (probabilidad / 100)
+  ) %>%
+  arrange(nombre, num_casas) %>%
+  group_by(nombre) %>%
+  mutate(
+    inversion_marginal = inversion_acumulada - lag(inversion_acumulada, default = 0),
+    retorno_marginal = retorno_esperado - lag(retorno_esperado, default = 0),
+    turnos_recuperacion = ifelse(retorno_marginal > 0, inversion_marginal / retorno_marginal, NA)
   )
 
 # Agrupamos por color
@@ -533,7 +567,7 @@ g4 <- ggplot(analisis_cuadrante, aes(x = capital_total_3casas, y = retorno_esper
   )) +
 
   scale_x_continuous(
-    labels = scales::dollar_format(prefix = "€", suffix = ""),
+    labels = scales::dollar_format(prefix = "EUR ", suffix = ""),
     expand = expansion(mult = c(0.1, 0.2))
   ) +
   scale_y_continuous(
@@ -583,7 +617,7 @@ g5 <- ggplot(analisis_dano, aes(x = probabilidad_media, y = dano_promedio_3casas
 
   # Formato de Ejes
   scale_y_continuous(
-    labels = scales::dollar_format(prefix = "€", suffix = ""),
+    labels = scales::dollar_format(prefix = "EUR ", suffix = ""),
     expand = expansion(mult = c(0.2, 0.1))
   ) +
   scale_x_continuous(
@@ -618,10 +652,13 @@ simular_supervivencia_dinamica <- function(n_rivales, n_turnos_max) {
     prob_impacto <- sum(datos_grupo$probabilidad) / 100
 
     # Pre-calculamos el daño promedio para cada nivel de casas
-    dano_base   <- mean(datos_grupo$alq_monopolio) # Base duplicada por tener color
-    dano_1_casa <- mean(datos_grupo$alq_1_casa)
-    dano_2_casa <- mean(datos_grupo$alq_2_casas)
-    dano_3_casa <- mean(datos_grupo$alq_3_casas)
+    # Conditional expected rent when a landing belongs to this group.  Using
+    # mean(rent) would give every square equal probability.
+    peso <- (datos_grupo$probabilidad / 100) / prob_impacto
+    dano_base   <- sum(peso * datos_grupo$alq_monopolio, na.rm = TRUE)
+    dano_1_casa <- sum(peso * datos_grupo$alq_1_casa, na.rm = TRUE)
+    dano_2_casa <- sum(peso * datos_grupo$alq_2_casas, na.rm = TRUE)
+    dano_3_casa <- sum(peso * datos_grupo$alq_3_casas, na.rm = TRUE)
 
     turnos_muerte <- numeric(n_rivales)
 
@@ -652,7 +689,7 @@ simular_supervivencia_dinamica <- function(n_rivales, n_turnos_max) {
 
         if (vida <= 0) esta_vivo <- FALSE
       }
-      turnos_muerte[i] <- turno
+      turnos_muerte[i] <- if (esta_vivo) n_turnos_max + 1 else turno
     }
 
     # Procesamos curva de supervivencia
@@ -759,7 +796,7 @@ g7 <- ggplot(datos_skyline, aes(x = id_ordenado, y = valor_generado, fill = grup
     title = "El Skyline del Tablero: ¿Dónde se genera el dinero?",
     subtitle = "Altura de la barra = Rentabilidad Real (Frecuencia x Alquiler 3 casas)",
     x = "Recorrido del Tablero (De la Salida al Final)",
-    y = "Valor Generado por Turno (€)"
+    y = "Valor Generado por Turno (EUR)"
   ) +
   theme_minimal() +
   theme(
@@ -768,4 +805,3 @@ g7 <- ggplot(datos_skyline, aes(x = id_ordenado, y = valor_generado, fill = grup
   )
 
 print(g7)
-

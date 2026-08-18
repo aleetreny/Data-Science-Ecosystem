@@ -8,7 +8,7 @@ A comparative study of KNN, SVM, Decision Trees, Random Forests, and Neural Netw
 
 This project applies and evaluates four families of supervised classification algorithms on a real-world agricultural dataset. Given 16 morphological measurements extracted from high-resolution images of individual beans, the goal is to identify which of seven dry bean varieties each grain belongs to.
 
-The analysis follows a consistent evaluation protocol across all methods: same train/test split, same preprocessing pipeline, and the same metrics (accuracy, macro F1, per-class precision/recall). Each section also digs into what the model's internal structure reveals about the geometry of the problem, not just how well it performs, but *why*.
+The analysis uses one stratified train/test split for final reporting. Hyperparameters and preprocessing are selected inside cross-validation on the training partition, so the test partition is not used to choose a model.
 
 ------------------------------------------------------------------------
 
@@ -28,16 +28,16 @@ The analysis follows a consistent evaluation protocol across all methods: same t
 
 ## Methods & Results
 
-| Method        | Key Hyperparameter    | Test Accuracy | Macro F1   | Needs Scaling |
-|---------------|---------------|---------------|---------------|---------------|
-| Decision Tree | `max_depth=10`        | 0.9071        | 0.9208     | No            |
-| Random Forest | `n=200`, OOB=0.9257   | 0.9199        | 0.9321     | No            |
-| KNN           | `k=30`                | 0.9207        | 0.9328     | Yes           |
-| Linear SVM    | `C=5`                 | 0.9232        | 0.9344     | Yes           |
-| RBF SVM       | `C=50`, `gamma=scale` | 0.9262        | 0.9376     | Yes           |
-| MLP           | `256-128-64-32`       | **0.9284**    | **0.9396** | Yes           |
+| Method        | Selection protocol    | Final test metrics | Needs Scaling |
+|---------------|---------------|---------------|---------------|
+| Decision Tree | Training-fold CV      | Regenerate notebook | No            |
+| Random Forest | Training-fold CV      | Regenerate notebook | No            |
+| KNN           | Training-fold CV      | Regenerate notebook | Yes           |
+| Linear SVM    | Training-fold CV      | Regenerate notebook | Yes           |
+| RBF SVM       | Training-fold CV      | Regenerate notebook | Yes           |
+| MLP           | Training-fold CV      | Regenerate notebook | Yes           |
 
-**Key finding:** the \~0.008 accuracy spread across all competitive methods reflects an irreducible SIRA/DERMASON overlap in feature space, the bottleneck is in the data geometry, not the choice of algorithm.
+The values in earlier rendered output predate the cross-validated selection protocol and are intentionally not retained as final results. Regenerate the notebook to obtain comparable held-out metrics; confusion patterns should be described as empirical observations, not irreducible error, unless supported by additional analysis.
 
 ------------------------------------------------------------------------
 

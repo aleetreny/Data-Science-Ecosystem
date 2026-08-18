@@ -85,7 +85,7 @@ library(scales)
 #df_koi = read_csv(url_koi, show_col_types = FALSE)
 
 # It case web goes slow, import data from the local copy
-df_koi <- read.csv("db/df_koi.csv")
+df_koi <- read.csv("df_koi.csv")
 
 # Select and rename the relevant columns
 df_selected = df_koi %>%
@@ -280,13 +280,11 @@ X2_bin <- df_sample %>%
   as.matrix()
 
 # --- Matrix 3: Multi-class Categorical Variables (X3) ---
-# Used for: Hamming Distance (Matching Coefficient)
-# We convert strings to numeric factor codes (1, 2, 3...) for easier calculation later
+# Used as categorical variables in Gower dissimilarity.  Keeping factors avoids
+# imposing an artificial numerical order on the classes.
 X3_cat <- df_sample %>%
   dplyr::select(insolation_class, magnitude_class) %>%
-  mutate(across(everything(), as.factor)) %>%
-  mutate(across(everything(), as.numeric)) %>% 
-  as.matrix()
+  mutate(across(everything(), as.factor))
 
 
 
@@ -375,7 +373,7 @@ range(D2_bin_sq)
 
 # 'daisy' with metric="gower" on factor variables applies the Matching coefficient.
 # Again, we must square the result.
-D3_cat_dist <- daisy(as.data.frame(X3_cat), metric = "gower")
+D3_cat_dist <- daisy(X3_cat, metric = "gower")
 D3_cat_sq <- as.matrix(D3_cat_dist)^2
 
 range(D3_cat_sq)

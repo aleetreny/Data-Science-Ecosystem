@@ -2,16 +2,19 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.8.26">
+<meta name="generator" content="quarto-1.9.38">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Alejandro Treny">
-<meta name="dcterms.date" content="2026-03-24">
+<meta name="dcterms.date" content="2026-08-18">
 <meta name="description" content="Multiclass classification of tumor types using RNA-Seq data and probabilistic learning models (LDA, QDA, Naive Bayes).">
 
 <title>Probabilistic Cancer Classification via RNA-Seq Data</title>
 <style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
 div.columns{display: flex; gap: min(4vw, 1.5em);}
@@ -64,16 +67,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="notebook_files/libs/clipboard/clipboard.min.js"></script>
 <script src="notebook_files/libs/quarto-html/quarto.js" type="module"></script>
 <script src="notebook_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
-<script src="notebook_files/libs/quarto-html/axe/axe-check.js" type="module"></script>
 <script src="notebook_files/libs/quarto-html/popper.min.js"></script>
 <script src="notebook_files/libs/quarto-html/tippy.umd.min.js"></script>
 <script src="notebook_files/libs/quarto-html/anchor.min.js"></script>
 <link href="notebook_files/libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="notebook_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="notebook_files/libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="notebook_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="notebook_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="notebook_files/libs/bootstrap/bootstrap-a74871fe4945b66d259aafc266475145.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
-<link href="notebook_files/libs/htmltools-fill-0.5.8.1/fill.css" rel="stylesheet">
+<link href="notebook_files/libs/bootstrap/bootstrap-77a487d9100ee92152d9498dc33865fd.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="notebook_files/libs/htmltools-fill-0.5.9/fill.css" rel="stylesheet">
 <script src="notebook_files/libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
 <link href="notebook_files/libs/datatables-css-0.0.0/datatables-crosstalk.css" rel="stylesheet">
 <script src="notebook_files/libs/datatables-binding-0.34.0/datatables.js"></script>
@@ -85,7 +87,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="notebook_files/libs/crosstalk-1.2.2/js/crosstalk.min.js"></script>
 
   <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
 
 <script type="text/javascript">
 const typesetMath = (el) => {
@@ -220,7 +222,7 @@ window.Quarto = {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">March 24, 2026</p>
+      <p class="date">August 18, 2026</p>
     </div>
   </div>
   
@@ -318,8 +320,8 @@ window.Quarto = {
 <span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-ecdb66cfe6859c5291ac" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-ecdb66cfe6859c5291ac">{"x":{"filter":"none","vertical":false,"caption":"<caption>Dimensions of loaded datasets<\/caption>","data":[["Gene Expression (data)","Labels"],[801,801],[20532,2]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Dataset<\/th>\n      <th>Rows<\/th>\n      <th>Columns<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","ordering":false,"columnDefs":[{"className":"dt-right","targets":[1,2]},{"name":"Dataset","targets":0},{"name":"Rows","targets":1},{"name":"Columns","targets":2}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item" id="htmlwidget-60f5379c5921d6f43cd5" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-60f5379c5921d6f43cd5">{"x":{"filter":"none","vertical":false,"caption":"<caption>Dimensions of loaded datasets<\/caption>","data":[["Gene Expression (data)","Labels"],[801,801],[20532,2]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Dataset<\/th>\n      <th>Rows<\/th>\n      <th>Columns<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","ordering":false,"columnDefs":[{"className":"dt-right","targets":[1,2]},{"name":"Dataset","targets":0},{"name":"Rows","targets":1},{"name":"Columns","targets":2}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
 <p>The gene expression matrix contains <strong>801 samples and 20,532 columns</strong> (20,531 genes plus the sample identifier). The labels file maps each of the 801 samples to one of the five cancer types. Both files share the same number of rows, confirming a one-to-one correspondence between expression profiles and class labels.</p>
@@ -344,8 +346,8 @@ window.Quarto = {
 <span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-6d26bb9d7dfc7fd02ba8" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-6d26bb9d7dfc7fd02ba8">{"x":{"filter":"none","vertical":false,"caption":"<caption>Preview of the first 10 columns (Sample ID, Class + 8 Genes)<\/caption>","data":[["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"],["sample_0","sample_1","sample_2","sample_3","sample_4","sample_5","sample_6","sample_7","sample_8","sample_9","sample_10","sample_11","sample_12","sample_13","sample_14","sample_15","sample_16","sample_17","sample_18","sample_19"],["PRAD","LUAD","PRAD","PRAD","BRCA","PRAD","KIRC","PRAD","BRCA","PRAD","BRCA","KIRC","PRAD","BRCA","BRCA","BRCA","LUAD","KIRC","KIRC","PRAD"],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2.01720929003,0.592732094867,3.5117589779,3.66361787431,2.65574107476,3.46785331372,1.224966365,2.85485342652,3.99212487426,3.64249364243,3.49207108711,2.94118144936,3.9703475182,1.5510483733,1.9648421858,2.90137860229,3.4609128992,3.00451936963,1.54146527849,4.16758272913],[3.26552691165,1.58842082049,4.32719871937,4.50764877794,2.82154695883,3.58191760772,1.69117679681,1.75047787844,2.77273024777,4.42355800269,3.553372792,2.66327629754,2.36429227014,3.52984592804,2.18301003676,3.68536833781,3.61847360308,3.00717755732,2.54153961931,3.84138948407],[5.47848651208,7.58615673813,6.88178695937,6.65906827484,6.53945352515,6.62024328973,6.57200741498,7.22672044861,6.54669231412,6.84951144203,7.15170663424,6.56168966691,7.1454431001,6.3268249381,6.59683230199,6.66966460873,5.66104837265,6.52420475302,6.84325527996,6.97612301373],[10.4319989607,9.62301085621,9.87072997113,10.1961840717,9.73826456185,9.70682924127,9.64051067136,9.75869126501,10.4882518866,9.46446610892,10.2534456958,9.37629255419,9.24060531982,10.6338489327,10.2481410545,9.99909803371,9.73121719013,9.06266141243,9.44446829832,9.98225207842],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[7.17517526213,6.81604924768,6.97212970934,7.84337463893,6.56696732901,7.75850972617,6.75488750216,5.95210288448,7.69022151943,7.94721612097,8.30125839364,7.86032347182,7.8107579842,8.94465935889,7.08725066461,6.94883442558,8.43559109283,7.9959367035,5.47909148553,6.97737152028],[0.591870870063,0,0.452595434703,0.434881719407,0.360982241369,0,0.531867995606,0,0.352306552906,0.724213686757,0,0.7541178595519999,0,0,0.441483479583,0,1.03365205249,1.68741907737,0,0]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>sample_id<\/th>\n      <th>Class<\/th>\n      <th>gene_0<\/th>\n      <th>gene_1<\/th>\n      <th>gene_2<\/th>\n      <th>gene_3<\/th>\n      <th>gene_4<\/th>\n      <th>gene_5<\/th>\n      <th>gene_6<\/th>\n      <th>gene_7<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"pageLength":5,"columnDefs":[{"className":"dt-right","targets":[3,4,5,6,7,8,9,10]},{"orderable":false,"targets":0},{"name":" ","targets":0},{"name":"sample_id","targets":1},{"name":"Class","targets":2},{"name":"gene_0","targets":3},{"name":"gene_1","targets":4},{"name":"gene_2","targets":5},{"name":"gene_3","targets":6},{"name":"gene_4","targets":7},{"name":"gene_5","targets":8},{"name":"gene_6","targets":9},{"name":"gene_7","targets":10}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[5,10,25,50,100]}},"evals":[],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item" id="htmlwidget-8b6f100a66039d1d459c" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-8b6f100a66039d1d459c">{"x":{"filter":"none","vertical":false,"caption":"<caption>Preview of the first 10 columns (Sample ID, Class + 8 Genes)<\/caption>","data":[["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"],["sample_0","sample_1","sample_2","sample_3","sample_4","sample_5","sample_6","sample_7","sample_8","sample_9","sample_10","sample_11","sample_12","sample_13","sample_14","sample_15","sample_16","sample_17","sample_18","sample_19"],["PRAD","LUAD","PRAD","PRAD","BRCA","PRAD","KIRC","PRAD","BRCA","PRAD","BRCA","KIRC","PRAD","BRCA","BRCA","BRCA","LUAD","KIRC","KIRC","PRAD"],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2.01720929003,0.592732094867,3.5117589779,3.66361787431,2.65574107476,3.46785331372,1.224966365,2.85485342652,3.99212487426,3.64249364243,3.49207108711,2.94118144936,3.9703475182,1.5510483733,1.9648421858,2.90137860229,3.4609128992,3.00451936963,1.54146527849,4.16758272913],[3.26552691165,1.58842082049,4.32719871937,4.50764877794,2.82154695883,3.58191760772,1.69117679681,1.75047787844,2.77273024777,4.42355800269,3.553372792,2.66327629754,2.36429227014,3.52984592804,2.18301003676,3.68536833781,3.61847360308,3.00717755732,2.54153961931,3.84138948407],[5.47848651208,7.58615673813,6.88178695937,6.65906827484,6.53945352515,6.62024328973,6.57200741498,7.22672044861,6.54669231412,6.84951144203,7.15170663424,6.56168966691,7.1454431001,6.3268249381,6.59683230199,6.66966460873,5.66104837265,6.52420475302,6.84325527996,6.97612301373],[10.4319989607,9.62301085621,9.87072997113,10.1961840717,9.73826456185,9.70682924127,9.64051067136,9.75869126501,10.4882518866,9.46446610892,10.2534456958,9.37629255419,9.24060531982,10.6338489327,10.2481410545,9.99909803371,9.73121719013,9.06266141243,9.44446829832,9.98225207842],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[7.17517526213,6.81604924768,6.97212970934,7.84337463893,6.56696732901,7.75850972617,6.75488750216,5.95210288448,7.69022151943,7.94721612097,8.30125839364,7.86032347182,7.8107579842,8.94465935889,7.08725066461,6.94883442558,8.43559109283,7.9959367035,5.47909148553,6.97737152028],[0.591870870063,0,0.452595434703,0.434881719407,0.360982241369,0,0.531867995606,0,0.352306552906,0.724213686757,0,0.7541178595519999,0,0,0.441483479583,0,1.03365205249,1.68741907737,0,0]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>sample_id<\/th>\n      <th>Class<\/th>\n      <th>gene_0<\/th>\n      <th>gene_1<\/th>\n      <th>gene_2<\/th>\n      <th>gene_3<\/th>\n      <th>gene_4<\/th>\n      <th>gene_5<\/th>\n      <th>gene_6<\/th>\n      <th>gene_7<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"pageLength":5,"columnDefs":[{"className":"dt-right","targets":[3,4,5,6,7,8,9,10]},{"orderable":false,"targets":0},{"name":" ","targets":0},{"name":"sample_id","targets":1},{"name":"Class","targets":2},{"name":"gene_0","targets":3},{"name":"gene_1","targets":4},{"name":"gene_2","targets":5},{"name":"gene_3","targets":6},{"name":"gene_4","targets":7},{"name":"gene_5","targets":8},{"name":"gene_6","targets":9},{"name":"gene_7","targets":10}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[5,10,25,50,100]}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
 <p>We merge both files on the shared sample identifier and convert the <code>Class</code> column to a factor for downstream modeling. The resulting dataset has <strong>801 rows and 20,533 columns</strong> (sample ID + cancer type + 20,531 gene expression values). The preview above shows the first few genes; each cell represents a normalized expression level for a given gene in a given patient.</p>
@@ -407,8 +409,8 @@ window.Quarto = {
 <span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-d10b8c4342fbdfe76971" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-d10b8c4342fbdfe76971">{"x":{"filter":"none","vertical":false,"caption":"<caption>Missing values summary across all gene expression columns<\/caption>","data":[["16,445,331"],[0],[0]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Total Cells<\/th>\n      <th>Missing Values<\/th>\n      <th>% Missing<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","ordering":false,"columnDefs":[{"className":"dt-right","targets":[1,2]},{"name":"Total Cells","targets":0},{"name":"Missing Values","targets":1},{"name":"% Missing","targets":2}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item" id="htmlwidget-e919c9cf2bf6bb793624" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-e919c9cf2bf6bb793624">{"x":{"filter":"none","vertical":false,"caption":"<caption>Missing values summary across all gene expression columns<\/caption>","data":[["16,445,331"],[0],[0]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Total Cells<\/th>\n      <th>Missing Values<\/th>\n      <th>% Missing<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","ordering":false,"columnDefs":[{"className":"dt-right","targets":[1,2]},{"name":"Total Cells","targets":0},{"name":"Missing Values","targets":1},{"name":"% Missing","targets":2}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
 <p>The dataset is <strong>completely clean</strong>, with zero missing values across all 16.4 million cells (801 samples x 20,531 genes). No imputation or filtering is needed, which is expected for a curated repository like TCGA/UCI.</p>
@@ -602,8 +604,8 @@ window.Quarto = {
 <span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-6e0e6d4bc36715e8c8e3" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-6e0e6d4bc36715e8c8e3">{"x":{"filter":"none","vertical":false,"caption":"<caption>Train/Test split with class distribution<\/caption>","data":[["Training","Test"],[642,159],[240,60],[63,15],[117,29],[113,28],[109,27]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Set<\/th>\n      <th>Samples<\/th>\n      <th>BRCA<\/th>\n      <th>COAD<\/th>\n      <th>KIRC<\/th>\n      <th>LUAD<\/th>\n      <th>PRAD<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","ordering":false,"scrollX":true,"columnDefs":[{"className":"dt-right","targets":[1,2,3,4,5,6]},{"name":"Set","targets":0},{"name":"Samples","targets":1},{"name":"BRCA","targets":2},{"name":"COAD","targets":3},{"name":"KIRC","targets":4},{"name":"LUAD","targets":5},{"name":"PRAD","targets":6}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item" id="htmlwidget-a4153baad19875c6b21a" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-a4153baad19875c6b21a">{"x":{"filter":"none","vertical":false,"caption":"<caption>Train/Test split with class distribution<\/caption>","data":[["Training","Test"],[642,159],[240,60],[63,15],[117,29],[113,28],[109,27]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Set<\/th>\n      <th>Samples<\/th>\n      <th>BRCA<\/th>\n      <th>COAD<\/th>\n      <th>KIRC<\/th>\n      <th>LUAD<\/th>\n      <th>PRAD<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","ordering":false,"scrollX":true,"columnDefs":[{"className":"dt-right","targets":[1,2,3,4,5,6]},{"name":"Set","targets":0},{"name":"Samples","targets":1},{"name":"BRCA","targets":2},{"name":"COAD","targets":3},{"name":"KIRC","targets":4},{"name":"LUAD","targets":5},{"name":"PRAD","targets":6}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
 <p>The stratified split preserves the relative proportions of each cancer type in both sets. The training set will be used for PCA fitting, model training, and 10-fold cross-validation. The test set is held out entirely until the final evaluation step.</p>
@@ -746,7 +748,7 @@ window.Quarto = {
 </section>
 <section id="model-training-and-evaluation" class="level1">
 <h1>Model Training and Evaluation</h1>
-<p>We now train the four probabilistic classifiers outlined in the introduction: <strong>LDA</strong>, <strong>QDA</strong>, <strong>Naive Bayes</strong>, and <strong>Multinomial Logistic Regression</strong>. All models are trained using <strong>10-fold cross-validation on the training set only</strong>. The PCA projection used here was also computed exclusively on the training data, ensuring a clean separation between fitting and evaluation.</p>
+<p>We now train the four probabilistic classifiers outlined in the introduction: <strong>LDA</strong>, <strong>QDA</strong>, <strong>Naive Bayes</strong>, and <strong>Multinomial Logistic Regression</strong>. PCA, centring and scaling are fitted independently inside every resampling fold; otherwise validation folds would influence their own feature representation.</p>
 <p>To understand how the number of principal components affects performance, we sweep over several values: 5, 10, 20, 50, 100, and 159 (the number needed to capture 80% of the training variance).</p>
 <p>Note that <strong>QDA</strong> requires each class-specific covariance matrix to be invertible, so the number of PCs must be smaller than the size of the smallest class in the training set. We therefore limit QDA to a maximum of 50 PCs.</p>
 <div class="cell">
@@ -757,62 +759,89 @@ window.Quarto = {
 <span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(e1071)</span>
 <span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(naivebayes)</span>
 <span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>train_control <span class="ot">&lt;-</span> <span class="fu">trainControl</span>(</span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">"cv"</span>,</span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">number =</span> <span class="dv">10</span>,</span>
-<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">savePredictions =</span> <span class="st">"final"</span>,</span>
-<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">classProbs =</span> <span class="cn">TRUE</span></span>
-<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>pc_counts <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">50</span>, <span class="dv">100</span>, <span class="dv">159</span>)</span>
-<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>results_list <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
-<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (k <span class="cf">in</span> pc_counts) {</span>
-<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Use only training PCA scores</span></span>
-<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>  md <span class="ot">&lt;-</span> <span class="fu">as_tibble</span>(pca_result<span class="sc">$</span>x[, <span class="dv">1</span><span class="sc">:</span>k]) <span class="sc">|&gt;</span></span>
-<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">Class =</span> train_data<span class="sc">$</span>Class)</span>
-<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
-<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>  <span class="co"># LDA</span></span>
-<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>  lda_fit <span class="ot">&lt;-</span> <span class="fu">train</span>(Class <span class="sc">~</span> ., <span class="at">data =</span> md, <span class="at">method =</span> <span class="st">"lda"</span>, <span class="at">trControl =</span> train_control)</span>
-<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Naive Bayes</span></span>
-<span id="cb17-28"><a href="#cb17-28" aria-hidden="true" tabindex="-1"></a>  nb_fit <span class="ot">&lt;-</span> <span class="fu">train</span>(Class <span class="sc">~</span> ., <span class="at">data =</span> md, <span class="at">method =</span> <span class="st">"naive_bayes"</span>, <span class="at">trControl =</span> train_control)</span>
-<span id="cb17-29"><a href="#cb17-29" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb17-30"><a href="#cb17-30" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Multinomial Logistic Regression</span></span>
-<span id="cb17-31"><a href="#cb17-31" aria-hidden="true" tabindex="-1"></a>  multinom_fit <span class="ot">&lt;-</span> <span class="fu">train</span>(Class <span class="sc">~</span> ., <span class="at">data =</span> md, <span class="at">method =</span> <span class="st">"multinom"</span>,</span>
-<span id="cb17-32"><a href="#cb17-32" aria-hidden="true" tabindex="-1"></a>                        <span class="at">trControl =</span> train_control, <span class="at">trace =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb17-33"><a href="#cb17-33" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb17-34"><a href="#cb17-34" aria-hidden="true" tabindex="-1"></a>  results_list[[<span class="fu">paste0</span>(k, <span class="st">"_lda"</span>)]] <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
-<span id="cb17-35"><a href="#cb17-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">PCs =</span> k, <span class="at">Model =</span> <span class="st">"LDA"</span>,</span>
-<span id="cb17-36"><a href="#cb17-36" aria-hidden="true" tabindex="-1"></a>    <span class="at">Accuracy =</span> lda_fit<span class="sc">$</span>results<span class="sc">$</span>Accuracy[<span class="dv">1</span>],</span>
-<span id="cb17-37"><a href="#cb17-37" aria-hidden="true" tabindex="-1"></a>    <span class="at">Kappa =</span> lda_fit<span class="sc">$</span>results<span class="sc">$</span>Kappa[<span class="dv">1</span>]</span>
-<span id="cb17-38"><a href="#cb17-38" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb17-39"><a href="#cb17-39" aria-hidden="true" tabindex="-1"></a>  results_list[[<span class="fu">paste0</span>(k, <span class="st">"_nb"</span>)]] <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
-<span id="cb17-40"><a href="#cb17-40" aria-hidden="true" tabindex="-1"></a>    <span class="at">PCs =</span> k, <span class="at">Model =</span> <span class="st">"Naive Bayes"</span>,</span>
-<span id="cb17-41"><a href="#cb17-41" aria-hidden="true" tabindex="-1"></a>    <span class="at">Accuracy =</span> <span class="fu">max</span>(nb_fit<span class="sc">$</span>results<span class="sc">$</span>Accuracy),</span>
-<span id="cb17-42"><a href="#cb17-42" aria-hidden="true" tabindex="-1"></a>    <span class="at">Kappa =</span> <span class="fu">max</span>(nb_fit<span class="sc">$</span>results<span class="sc">$</span>Kappa)</span>
-<span id="cb17-43"><a href="#cb17-43" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb17-44"><a href="#cb17-44" aria-hidden="true" tabindex="-1"></a>  results_list[[<span class="fu">paste0</span>(k, <span class="st">"_multinom"</span>)]] <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
-<span id="cb17-45"><a href="#cb17-45" aria-hidden="true" tabindex="-1"></a>    <span class="at">PCs =</span> k, <span class="at">Model =</span> <span class="st">"Multinomial LogReg"</span>,</span>
-<span id="cb17-46"><a href="#cb17-46" aria-hidden="true" tabindex="-1"></a>    <span class="at">Accuracy =</span> <span class="fu">max</span>(multinom_fit<span class="sc">$</span>results<span class="sc">$</span>Accuracy),</span>
-<span id="cb17-47"><a href="#cb17-47" aria-hidden="true" tabindex="-1"></a>    <span class="at">Kappa =</span> <span class="fu">max</span>(multinom_fit<span class="sc">$</span>results<span class="sc">$</span>Kappa)</span>
-<span id="cb17-48"><a href="#cb17-48" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb17-49"><a href="#cb17-49" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb17-50"><a href="#cb17-50" aria-hidden="true" tabindex="-1"></a>  <span class="co"># QDA only for k &lt;= 50</span></span>
-<span id="cb17-51"><a href="#cb17-51" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (k <span class="sc">&lt;=</span> <span class="dv">50</span>) {</span>
-<span id="cb17-52"><a href="#cb17-52" aria-hidden="true" tabindex="-1"></a>    qda_fit <span class="ot">&lt;-</span> <span class="fu">train</span>(Class <span class="sc">~</span> ., <span class="at">data =</span> md, <span class="at">method =</span> <span class="st">"qda"</span>, <span class="at">trControl =</span> train_control)</span>
-<span id="cb17-53"><a href="#cb17-53" aria-hidden="true" tabindex="-1"></a>    results_list[[<span class="fu">paste0</span>(k, <span class="st">"_qda"</span>)]] <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
-<span id="cb17-54"><a href="#cb17-54" aria-hidden="true" tabindex="-1"></a>      <span class="at">PCs =</span> k, <span class="at">Model =</span> <span class="st">"QDA"</span>,</span>
-<span id="cb17-55"><a href="#cb17-55" aria-hidden="true" tabindex="-1"></a>      <span class="at">Accuracy =</span> qda_fit<span class="sc">$</span>results<span class="sc">$</span>Accuracy[<span class="dv">1</span>],</span>
-<span id="cb17-56"><a href="#cb17-56" aria-hidden="true" tabindex="-1"></a>      <span class="at">Kappa =</span> qda_fit<span class="sc">$</span>results<span class="sc">$</span>Kappa[<span class="dv">1</span>]</span>
-<span id="cb17-57"><a href="#cb17-57" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb17-58"><a href="#cb17-58" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb17-59"><a href="#cb17-59" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb17-60"><a href="#cb17-60" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-61"><a href="#cb17-61" aria-hidden="true" tabindex="-1"></a>results_all <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(results_list)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>pc_counts <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">50</span>, <span class="dv">100</span>, <span class="dv">159</span>)</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>x_train <span class="ot">&lt;-</span> train_data <span class="sc">|&gt;</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(<span class="fu">all_of</span>(nonzero_var_genes))</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>y_train <span class="ot">&lt;-</span> train_data<span class="sc">$</span>Class</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a><span class="co"># The x/y interface avoids expanding a 20k-gene formula.  To avoid fitting the</span></span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a><span class="co"># same PCA 22 times per fold, each fold fits the full 159-PC transformation once</span></span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a><span class="co"># on its analysis subset, then every classifier consumes the required prefix.</span></span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a><span class="co"># This preserves fold isolation: validation samples never affect centring,</span></span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a><span class="co"># scaling, zero-variance filtering, or PCA.</span></span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>fold_indices <span class="ot">&lt;-</span> <span class="fu">createFolds</span>(y_train, <span class="at">k =</span> <span class="dv">10</span>, <span class="at">returnTrain =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>max_pcs <span class="ot">&lt;-</span> <span class="fu">max</span>(pc_counts)</span>
+<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>fold_scores <span class="ot">&lt;-</span> <span class="fu">lapply</span>(fold_indices, <span class="cf">function</span>(validation_idx) {</span>
+<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>  analysis_idx <span class="ot">&lt;-</span> <span class="fu">setdiff</span>(<span class="fu">seq_len</span>(<span class="fu">nrow</span>(x_train)), validation_idx)</span>
+<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a>  transformation <span class="ot">&lt;-</span> <span class="fu">preProcess</span>(</span>
+<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a>    x_train[analysis_idx, ],</span>
+<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">method =</span> <span class="fu">c</span>(<span class="st">"zv"</span>, <span class="st">"center"</span>, <span class="st">"scale"</span>, <span class="st">"pca"</span>),</span>
+<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">pcaComp =</span> max_pcs</span>
+<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-28"><a href="#cb17-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(</span>
+<span id="cb17-29"><a href="#cb17-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">train_x =</span> <span class="fu">predict</span>(transformation, x_train[analysis_idx, ])[, <span class="fu">seq_len</span>(max_pcs), <span class="at">drop =</span> <span class="cn">FALSE</span>],</span>
+<span id="cb17-30"><a href="#cb17-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">valid_x =</span> <span class="fu">predict</span>(transformation, x_train[validation_idx, ])[, <span class="fu">seq_len</span>(max_pcs), <span class="at">drop =</span> <span class="cn">FALSE</span>],</span>
+<span id="cb17-31"><a href="#cb17-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">train_y =</span> y_train[analysis_idx],</span>
+<span id="cb17-32"><a href="#cb17-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">valid_y =</span> y_train[validation_idx]</span>
+<span id="cb17-33"><a href="#cb17-33" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb17-34"><a href="#cb17-34" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb17-35"><a href="#cb17-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-36"><a href="#cb17-36" aria-hidden="true" tabindex="-1"></a>predict_fold <span class="ot">&lt;-</span> <span class="cf">function</span>(model_name, fold, k) {</span>
+<span id="cb17-37"><a href="#cb17-37" aria-hidden="true" tabindex="-1"></a>  train_x <span class="ot">&lt;-</span> fold<span class="sc">$</span>train_x[, <span class="fu">seq_len</span>(k), drop <span class="ot">=</span> <span class="cn">FALSE</span>]</span>
+<span id="cb17-38"><a href="#cb17-38" aria-hidden="true" tabindex="-1"></a>  valid_x <span class="ot">&lt;-</span> fold<span class="sc">$</span>valid_x[, <span class="fu">seq_len</span>(k), drop <span class="ot">=</span> <span class="cn">FALSE</span>]</span>
+<span id="cb17-39"><a href="#cb17-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-40"><a href="#cb17-40" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (model_name <span class="sc">==</span> <span class="st">"LDA"</span>) {</span>
+<span id="cb17-41"><a href="#cb17-41" aria-hidden="true" tabindex="-1"></a>    <span class="fu">predict</span>(<span class="fu">lda</span>(<span class="at">x =</span> train_x, <span class="at">grouping =</span> fold<span class="sc">$</span>train_y), valid_x)<span class="sc">$</span>class</span>
+<span id="cb17-42"><a href="#cb17-42" aria-hidden="true" tabindex="-1"></a>  } <span class="cf">else</span> <span class="cf">if</span> (model_name <span class="sc">==</span> <span class="st">"QDA"</span>) {</span>
+<span id="cb17-43"><a href="#cb17-43" aria-hidden="true" tabindex="-1"></a>    <span class="fu">predict</span>(<span class="fu">qda</span>(<span class="at">x =</span> train_x, <span class="at">grouping =</span> fold<span class="sc">$</span>train_y), valid_x)<span class="sc">$</span>class</span>
+<span id="cb17-44"><a href="#cb17-44" aria-hidden="true" tabindex="-1"></a>  } <span class="cf">else</span> <span class="cf">if</span> (model_name <span class="sc">==</span> <span class="st">"Naive Bayes"</span>) {</span>
+<span id="cb17-45"><a href="#cb17-45" aria-hidden="true" tabindex="-1"></a>    fit <span class="ot">&lt;-</span> <span class="fu">naive_bayes</span>(<span class="at">x =</span> train_x, <span class="at">y =</span> fold<span class="sc">$</span>train_y)</span>
+<span id="cb17-46"><a href="#cb17-46" aria-hidden="true" tabindex="-1"></a>    <span class="fu">predict</span>(fit, <span class="at">newdata =</span> valid_x)</span>
+<span id="cb17-47"><a href="#cb17-47" aria-hidden="true" tabindex="-1"></a>  } <span class="cf">else</span> <span class="cf">if</span> (model_name <span class="sc">==</span> <span class="st">"Multinomial LogReg"</span>) {</span>
+<span id="cb17-48"><a href="#cb17-48" aria-hidden="true" tabindex="-1"></a>    <span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb17-49"><a href="#cb17-49" aria-hidden="true" tabindex="-1"></a>    train_md <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(train_x)</span>
+<span id="cb17-50"><a href="#cb17-50" aria-hidden="true" tabindex="-1"></a>    train_md<span class="sc">$</span>Class <span class="ot">&lt;-</span> fold<span class="sc">$</span>train_y</span>
+<span id="cb17-51"><a href="#cb17-51" aria-hidden="true" tabindex="-1"></a>    fit <span class="ot">&lt;-</span> <span class="fu">multinom</span>(Class <span class="sc">~</span> ., <span class="at">data =</span> train_md, <span class="at">trace =</span> <span class="cn">FALSE</span>, <span class="at">MaxNWts =</span> <span class="dv">5000</span>)</span>
+<span id="cb17-52"><a href="#cb17-52" aria-hidden="true" tabindex="-1"></a>    <span class="fu">predict</span>(fit, <span class="at">newdata =</span> <span class="fu">as.data.frame</span>(valid_x))</span>
+<span id="cb17-53"><a href="#cb17-53" aria-hidden="true" tabindex="-1"></a>  } <span class="cf">else</span> {</span>
+<span id="cb17-54"><a href="#cb17-54" aria-hidden="true" tabindex="-1"></a>    <span class="fu">stop</span>(<span class="st">"Unsupported model: "</span>, model_name)</span>
+<span id="cb17-55"><a href="#cb17-55" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb17-56"><a href="#cb17-56" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb17-57"><a href="#cb17-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-58"><a href="#cb17-58" aria-hidden="true" tabindex="-1"></a>evaluate_configuration <span class="ot">&lt;-</span> <span class="cf">function</span>(model_name, k) {</span>
+<span id="cb17-59"><a href="#cb17-59" aria-hidden="true" tabindex="-1"></a>  predictions <span class="ot">&lt;-</span> <span class="fu">unlist</span>(<span class="fu">lapply</span>(fold_scores, predict_fold, <span class="at">model_name =</span> model_name, <span class="at">k =</span> k))</span>
+<span id="cb17-60"><a href="#cb17-60" aria-hidden="true" tabindex="-1"></a>  reference <span class="ot">&lt;-</span> <span class="fu">unlist</span>(<span class="fu">lapply</span>(fold_scores, <span class="st">`</span><span class="at">[[</span><span class="st">`</span>, <span class="st">"valid_y"</span>))</span>
+<span id="cb17-61"><a href="#cb17-61" aria-hidden="true" tabindex="-1"></a>  comparison <span class="ot">&lt;-</span> <span class="fu">confusionMatrix</span>(</span>
+<span id="cb17-62"><a href="#cb17-62" aria-hidden="true" tabindex="-1"></a>    <span class="fu">factor</span>(predictions, <span class="at">levels =</span> <span class="fu">levels</span>(y_train)),</span>
+<span id="cb17-63"><a href="#cb17-63" aria-hidden="true" tabindex="-1"></a>    <span class="fu">factor</span>(reference, <span class="at">levels =</span> <span class="fu">levels</span>(y_train))</span>
+<span id="cb17-64"><a href="#cb17-64" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb17-65"><a href="#cb17-65" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-66"><a href="#cb17-66" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(</span>
+<span id="cb17-67"><a href="#cb17-67" aria-hidden="true" tabindex="-1"></a>    <span class="at">PCs =</span> k,</span>
+<span id="cb17-68"><a href="#cb17-68" aria-hidden="true" tabindex="-1"></a>    <span class="at">Model =</span> model_name,</span>
+<span id="cb17-69"><a href="#cb17-69" aria-hidden="true" tabindex="-1"></a>    <span class="at">Accuracy =</span> <span class="fu">unname</span>(comparison<span class="sc">$</span>overall[<span class="st">"Accuracy"</span>]),</span>
+<span id="cb17-70"><a href="#cb17-70" aria-hidden="true" tabindex="-1"></a>    <span class="at">Kappa =</span> <span class="fu">unname</span>(comparison<span class="sc">$</span>overall[<span class="st">"Kappa"</span>])</span>
+<span id="cb17-71"><a href="#cb17-71" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb17-72"><a href="#cb17-72" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb17-73"><a href="#cb17-73" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-74"><a href="#cb17-74" aria-hidden="true" tabindex="-1"></a>models_to_evaluate <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"LDA"</span>, <span class="st">"Naive Bayes"</span>, <span class="st">"Multinomial LogReg"</span>)</span>
+<span id="cb17-75"><a href="#cb17-75" aria-hidden="true" tabindex="-1"></a>results_list <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb17-76"><a href="#cb17-76" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-77"><a href="#cb17-77" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (k <span class="cf">in</span> pc_counts) {</span>
+<span id="cb17-78"><a href="#cb17-78" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (model_name <span class="cf">in</span> models_to_evaluate) {</span>
+<span id="cb17-79"><a href="#cb17-79" aria-hidden="true" tabindex="-1"></a>    results_list[[<span class="fu">paste</span>(model_name, k, <span class="at">sep =</span> <span class="st">"_"</span>)]] <span class="ot">&lt;-</span> <span class="fu">evaluate_configuration</span>(model_name, k)</span>
+<span id="cb17-80"><a href="#cb17-80" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb17-81"><a href="#cb17-81" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-82"><a href="#cb17-82" aria-hidden="true" tabindex="-1"></a>  <span class="co"># QDA needs more samples per class than retained components.</span></span>
+<span id="cb17-83"><a href="#cb17-83" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (k <span class="sc">&lt;=</span> <span class="dv">50</span>) {</span>
+<span id="cb17-84"><a href="#cb17-84" aria-hidden="true" tabindex="-1"></a>    results_list[[<span class="fu">paste</span>(<span class="st">"QDA"</span>, k, <span class="at">sep =</span> <span class="st">"_"</span>)]] <span class="ot">&lt;-</span> <span class="fu">evaluate_configuration</span>(<span class="st">"QDA"</span>, k)</span>
+<span id="cb17-85"><a href="#cb17-85" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb17-86"><a href="#cb17-86" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb17-87"><a href="#cb17-87" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-88"><a href="#cb17-88" aria-hidden="true" tabindex="-1"></a>results_all <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(results_list)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 <p>The training loop fits a total of <strong>22 models</strong> (4 classifiers x 6 PC counts, minus QDA for 100 and 159 PCs). Each model is evaluated via 10-fold cross-validation <strong>within the training set</strong>, producing both <strong>Accuracy</strong> and <strong>Kappa</strong> as performance metrics. Kappa is particularly useful here because it adjusts for the class imbalance we observed earlier, giving a more honest picture of whether the model is genuinely learning the class boundaries or simply exploiting the prior probabilities.</p>
@@ -857,17 +886,11 @@ window.Quarto = {
 <span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-ad60e06b1f85a166446e" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-ad60e06b1f85a166446e">{"x":{"filter":"none","vertical":false,"caption":"<caption>10-fold CV results across models and PC counts<\/caption>","data":[[5,10,20,50,100,159],["95.8%","99.2%","99.7%","100.0%","99.7%","100.0%"],["94.7%","97.5%","96.7%","95.5%","91.1%","81.3%"],["98.6%","100.0%","99.8%","100.0%","99.8%","99.5%"],["98.9%","99.8%","99.5%","97.7%",null,null],[0.945,0.99,0.996,1,0.996,1],[0.93,0.967,0.957,0.9399999999999999,0.882,0.755],[0.981,1,0.998,1,0.998,0.994],[0.986,0.998,0.994,0.969,null,null]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>PCs<\/th>\n      <th>Accuracy_LDA<\/th>\n      <th>Accuracy_Naive Bayes<\/th>\n      <th>Accuracy_Multinomial LogReg<\/th>\n      <th>Accuracy_QDA<\/th>\n      <th>Kappa_LDA<\/th>\n      <th>Kappa_Naive Bayes<\/th>\n      <th>Kappa_Multinomial LogReg<\/th>\n      <th>Kappa_QDA<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","pageLength":10,"scrollX":true,"columnDefs":[{"className":"dt-right","targets":[0,5,6,7,8]},{"name":"PCs","targets":0},{"name":"Accuracy_LDA","targets":1},{"name":"Accuracy_Naive Bayes","targets":2},{"name":"Accuracy_Multinomial LogReg","targets":3},{"name":"Accuracy_QDA","targets":4},{"name":"Kappa_LDA","targets":5},{"name":"Kappa_Naive Bayes","targets":6},{"name":"Kappa_Multinomial LogReg","targets":7},{"name":"Kappa_QDA","targets":8}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item" id="htmlwidget-0bb541c6bbf51a916a3a" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-0bb541c6bbf51a916a3a">{"x":{"filter":"none","vertical":false,"caption":"<caption>10-fold CV results across models and PC counts<\/caption>","data":[[5,10,20,50,100,159],["96.0%","99.2%","99.7%","99.8%","100.0%","100.0%"],["94.2%","97.8%","97.7%","98.8%","90.5%","68.4%"],["98.3%","99.7%","99.5%","99.8%","99.5%","99.7%"],["98.9%","99.8%","99.7%","98.0%",null,null],[0.947,0.99,0.996,0.998,1,1],[0.924,0.971,0.969,0.984,0.877,0.605],[0.977,0.996,0.994,0.998,0.994,0.996],[0.986,0.998,0.996,0.973,null,null]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>PCs<\/th>\n      <th>Accuracy_LDA<\/th>\n      <th>Accuracy_Naive Bayes<\/th>\n      <th>Accuracy_Multinomial LogReg<\/th>\n      <th>Accuracy_QDA<\/th>\n      <th>Kappa_LDA<\/th>\n      <th>Kappa_Naive Bayes<\/th>\n      <th>Kappa_Multinomial LogReg<\/th>\n      <th>Kappa_QDA<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","pageLength":10,"scrollX":true,"columnDefs":[{"className":"dt-right","targets":[0,5,6,7,8]},{"name":"PCs","targets":0},{"name":"Accuracy_LDA","targets":1},{"name":"Accuracy_Naive Bayes","targets":2},{"name":"Accuracy_Multinomial LogReg","targets":3},{"name":"Accuracy_QDA","targets":4},{"name":"Kappa_LDA","targets":5},{"name":"Kappa_Naive Bayes","targets":6},{"name":"Kappa_Multinomial LogReg","targets":7},{"name":"Kappa_QDA","targets":8}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
-<p>Several key patterns emerge from the results:</p>
-<ul>
-<li><strong>LDA</strong> and <strong>Multinomial Logistic Regression</strong> are the top performers, both reaching 100% CV accuracy with 50 and 10 PCs respectively. LDA already exceeds 99% with just 10 components, and achieves a perfect score from 50 PCs onward.</li>
-<li><strong>QDA</strong> performs very well at low PC counts, peaking at 99.8% with 10 PCs, but is constrained by its inability to handle more than ~50 PCs (due to the small COAD class size). Within its feasible range, it is competitive with LDA.</li>
-<li><strong>Naive Bayes</strong> shows a counterintuitive pattern: its accuracy <strong>decreases</strong> as the number of PCs increases. With 10 PCs it achieves ~97.5%, but with 159 PCs it drops to ~81%. This is a textbook example of the “curse of dimensionality” for Naive Bayes, which assumes feature independence. As more components are added, finite-sample estimation introduces dependencies that violate this assumption, and the model degrades.</li>
-</ul>
-<p>The strong performance of LDA is noteworthy given that PCA already produces uncorrelated features with a shared coordinate system, which aligns well with LDA’s assumption of a common covariance structure across classes.</p>
+<p>The table and curve above are the authoritative record for this execution. They compare model/PC configurations using only the training partition; the hold-out test set remains untouched until the next section. QDA is deliberately limited to 50 PCs because each class covariance estimate requires more observations than retained components. PCA produces orthogonal coordinates, which can improve numerical conditioning, but it does not itself prove that any model assumption is true.</p>
 </section>
 <section id="per-model-confusion-matrices-test-set" class="level2">
 <h2 class="anchored" data-anchor-id="per-model-confusion-matrices-test-set">Per-Model Confusion Matrices (Test Set)</h2>
@@ -959,7 +982,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>LDA achieves <strong>perfect classification</strong> (100% accuracy) on the held-out test set with 50 PCs, correctly classifying all 159 test samples across all five tumor types. After PCA, the features are uncorrelated and share a common scale, which is exactly the scenario where LDA’s assumption of equal covariance matrices holds best.</p>
+<p>The matrix and subtitle above report LDA’s held-out result for the PC count selected by training-only cross-validation. Orthogonal PCA scores can improve numerical conditioning, but they do not by themselves establish LDA’s equal-covariance assumption.</p>
 </section>
 <section id="qda" class="level3">
 <h3 class="anchored" data-anchor-id="qda">QDA</h3>
@@ -990,7 +1013,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>QDA, which allows each class to have its own covariance matrix, also achieves <strong>100% accuracy</strong> on the test set with just 10 PCs. Its flexibility provides no clear advantage over LDA in this dataset, suggesting that the class-conditional distributions in PC space share similar covariance structures. Notably, QDA reaches perfect classification with fewer components than LDA (10 vs.&nbsp;50), which may reflect its ability to capture class-specific variance patterns in a compact feature space.</p>
+<p>QDA permits one covariance matrix per class. Its held-out result is shown above for the configuration selected without using the test set; comparison with LDA should be treated as empirical for this split rather than as evidence that either covariance assumption is universally correct.</p>
 </section>
 <section id="naive-bayes" class="level3">
 <h3 class="anchored" data-anchor-id="naive-bayes">Naive Bayes</h3>
@@ -1021,7 +1044,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>Naive Bayes achieves <strong>98.1% accuracy</strong> on the test set at its optimal 10 PCs, misclassifying only 3 out of 159 samples. The confusion matrix shows that errors involve one COAD, one LUAD, and one PRAD sample being misclassified as BRCA. This is consistent with the PCA scatter plots, where BRCA’s cloud partially overlaps with these classes in the first few principal components. KIRC, the most well-separated class, is classified perfectly.</p>
+<p>Naive Bayes’ held-out errors and class-specific pattern are shown in the matrix above. Its conditional-independence assumption remains an approximation even when PCA scores are uncorrelated, so this model should be judged from its validation and test metrics rather than from the visualization alone.</p>
 </section>
 <section id="multinomial-logistic-regression" class="level3">
 <h3 class="anchored" data-anchor-id="multinomial-logistic-regression">Multinomial Logistic Regression</h3>
@@ -1052,7 +1075,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>Multinomial Logistic Regression achieves <strong>98.7% accuracy</strong> on the test set with 10 PCs, misclassifying only 2 out of 159 samples: one BRCA predicted as LUAD and one LUAD predicted as BRCA. As a discriminative model (as opposed to the generative LDA), it directly estimates the decision boundaries between classes without making distributional assumptions. Its strong performance with just 10 components confirms that the PCA-reduced features provide excellent linear separability, though the slightly lower accuracy compared to LDA (which uses 50 PCs) reflects the trade-off between dimensionality and model complexity.</p>
+<p>Multinomial logistic regression directly estimates decision boundaries in the selected PCA space. The matrix above gives its current held-out result; it should be compared with the other methods using the same fixed test split, while recognising that a single split does not quantify deployment performance.</p>
 </section>
 </section>
 <section id="overall-best-model-selection" class="level2">
@@ -1081,17 +1104,17 @@ window.Quarto = {
 <span id="cb25-19"><a href="#cb25-19" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-f6537f9edda6d06a0949" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-f6537f9edda6d06a0949">{"x":{"filter":"none","vertical":false,"caption":"<caption>Test set performance comparison across models (best CV configuration each)<\/caption>","data":[["LDA","QDA","Multinomial LogReg","Naive Bayes"],[50,10,10,10],["100.0%","100.0%","98.7%","98.1%"],[1,1,0.9834000000000001,0.9749]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Model<\/th>\n      <th>PCs<\/th>\n      <th>Test Accuracy<\/th>\n      <th>Test Kappa<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","ordering":false,"columnDefs":[{"className":"dt-right","targets":[1,3]},{"name":"Model","targets":0},{"name":"PCs","targets":1},{"name":"Test Accuracy","targets":2},{"name":"Test Kappa","targets":3}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item" id="htmlwidget-cc78ece3d18419a4bfcb" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-cc78ece3d18419a4bfcb">{"x":{"filter":"none","vertical":false,"caption":"<caption>Test set performance comparison across models (best CV configuration each)<\/caption>","data":[["LDA","Multinomial LogReg","QDA","Naive Bayes"],[100,50,10,50],["100.0%","100.0%","100.0%","97.5%"],[1,1,1,0.9666]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Model<\/th>\n      <th>PCs<\/th>\n      <th>Test Accuracy<\/th>\n      <th>Test Kappa<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","ordering":false,"columnDefs":[{"className":"dt-right","targets":[1,3]},{"name":"Model","targets":0},{"name":"PCs","targets":1},{"name":"Test Accuracy","targets":2},{"name":"Test Kappa","targets":3}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
-<p>The table above shows the <strong>final, unbiased performance</strong> of each model evaluated on data that was never seen during training or cross-validation. LDA and QDA both achieve perfect classification, while Multinomial Logistic Regression and Naive Bayes make only 2 and 3 errors respectively out of 159 test samples. These results are trustworthy because PCA was fitted exclusively on the training data and the test set was projected independently. In practice, <strong>LDA</strong> remains the recommended choice for its combination of perfect accuracy, simplicity, and interpretability.</p>
+<p>The table above reports one held-out evaluation for each model after selecting its PC count using training-only cross-validation. PCA for the final fits is trained exclusively on the training partition and then applied to the untouched test partition. These results are useful for this dataset and split, but a single hold-out does not by itself establish deployment performance; repeated external evaluation would be needed for that claim.</p>
 <hr>
 </section>
 </section>
 <section id="result-validation" class="level1">
 <h1>Result Validation</h1>
-<p>Achieving near-perfect accuracy can be a symptom of data leakage or other methodological errors. To confirm our results are legitimate, we run a series of sanity checks.</p>
+<p>Very high accuracy can be a symptom of data leakage or other methodological errors. The following checks assess selected leakage risks, but they do not replace repeated evaluation on an external cohort.</p>
 <section id="permutation-test" class="level2">
 <h2 class="anchored" data-anchor-id="permutation-test">Permutation Test</h2>
 <p>If the model is exploiting a real biological signal, shuffling the class labels should destroy that signal and drop accuracy to chance level (~20% for 5 balanced classes).</p>
@@ -1125,11 +1148,11 @@ window.Quarto = {
 <span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-9143a36fd69b1cc36110" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-9143a36fd69b1cc36110">{"x":{"filter":"none","vertical":false,"caption":"<caption>Permutation test: accuracy with real vs. shuffled labels<\/caption>","data":[["Real labels (LDA, 50 PCs)","Shuffled labels (LDA, 50 PCs)","Random chance (5 classes)"],["100.0%","28.9%","20.0%"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Condition<\/th>\n      <th>Accuracy<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","ordering":false,"columnDefs":[{"name":"Condition","targets":0},{"name":"Accuracy","targets":1}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item" id="htmlwidget-aff392ed7b15902ba10a" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-aff392ed7b15902ba10a">{"x":{"filter":"none","vertical":false,"caption":"<caption>Permutation test: accuracy with real vs. shuffled labels<\/caption>","data":[["Real labels (LDA, 50 PCs)","Shuffled labels (LDA, 50 PCs)","Random chance (5 classes)"],["100.0%","28.9%","20.0%"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Condition<\/th>\n      <th>Accuracy<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","ordering":false,"columnDefs":[{"name":"Condition","targets":0},{"name":"Accuracy","targets":1}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
-<p>With shuffled labels, LDA accuracy drops to approximately <strong>29%</strong>, close to the 20% expected by chance (the slight deviation is due to class imbalance). This confirms the model relies on the actual biological signal, not on artifacts or data leakage.</p>
+<p>The table contrasts the real-label result with a single shuffled-label sanity check. It is diagnostic rather than a formal permutation test: a formal test would repeat many permutations and report an empirical p-value.</p>
 </section>
 <section id="degradation-with-fewer-components" class="level2">
 <h2 class="anchored" data-anchor-id="degradation-with-fewer-components">Degradation with Fewer Components</h2>
@@ -1167,7 +1190,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>With only 2 PCs, accuracy drops to <strong>71.7%</strong>. KIRC remains well-classified (clearly separated in PC1 vs PC2, as seen in the PCA scatter plot), but the other classes suffer significant confusion, particularly PRAD and LUAD. This gradual improvement from 2 PCs → 10 PCs → 50 PCs is exactly the behavior expected from a correctly functioning pipeline.</p>
+<p>The two-PC matrix provides a deliberately information-limited baseline. Any difference from the selected-PC result illustrates sensitivity to representation dimension; it is not, by itself, a proof of absence of leakage.</p>
 </section>
 <section id="traintest-integrity" class="level2">
 <h2 class="anchored" data-anchor-id="traintest-integrity">Train/Test Integrity</h2>
@@ -1180,8 +1203,8 @@ window.Quarto = {
 <span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>test_ids  <span class="ot">&lt;-</span> test_data<span class="sc">$</span>sample_id</span>
 <span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>id_overlap <span class="ot">&lt;-</span> <span class="fu">length</span>(<span class="fu">intersect</span>(train_ids, test_ids))</span>
 <span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Check for exact duplicate rows (using first 100 genes for efficiency)</span></span>
-<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>check_genes <span class="ot">&lt;-</span> nonzero_var_genes[<span class="dv">1</span><span class="sc">:</span><span class="dv">100</span>]</span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Check for exact duplicate rows across the full analysis feature space.</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>check_genes <span class="ot">&lt;-</span> nonzero_var_genes</span>
 <span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>train_mat <span class="ot">&lt;-</span> train_data <span class="sc">|&gt;</span> dplyr<span class="sc">::</span><span class="fu">select</span>(<span class="fu">all_of</span>(check_genes)) <span class="sc">|&gt;</span> <span class="fu">as.matrix</span>()</span>
 <span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>test_mat  <span class="ot">&lt;-</span> test_data  <span class="sc">|&gt;</span> dplyr<span class="sc">::</span><span class="fu">select</span>(<span class="fu">all_of</span>(check_genes)) <span class="sc">|&gt;</span> <span class="fu">as.matrix</span>()</span>
 <span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a></span>
@@ -1212,31 +1235,31 @@ window.Quarto = {
 <span id="cb28-35"><a href="#cb28-35" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-34aa18575df5423f80a7" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-34aa18575df5423f80a7">{"x":{"filter":"none","vertical":false,"caption":"<caption>Train/test set integrity checks<\/caption>","data":[["Train samples","Test samples","Sample ID overlap","Exact duplicate rows (test in train)"],["642","159","0","0"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Check<\/th>\n      <th>Result<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","ordering":false,"columnDefs":[{"name":"Check","targets":0},{"name":"Result","targets":1}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item" id="htmlwidget-d9028048a499d44c2184" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-d9028048a499d44c2184">{"x":{"filter":"none","vertical":false,"caption":"<caption>Train/test set integrity checks<\/caption>","data":[["Train samples","Test samples","Sample ID overlap","Exact duplicate rows (test in train)"],["642","159","0","0"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Check<\/th>\n      <th>Result<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","ordering":false,"columnDefs":[{"name":"Check","targets":0},{"name":"Result","targets":1}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
 <p>The training and test sets are <strong>completely disjoint</strong>: zero sample ID overlap and zero exact duplicate rows. Combined with the fact that PCA was fitted exclusively on training data, this confirms there is no information leakage between the two sets.</p>
 </section>
 <section id="why-are-these-results-so-high" class="level2">
 <h2 class="anchored" data-anchor-id="why-are-these-results-so-high">Why Are These Results So High?</h2>
-<p>The near-perfect accuracy is not an error; it reflects the <strong>biological reality</strong> of this dataset. The five cancer types originate from five fundamentally different organs (breast, kidney, colon, lung, prostate), each with a highly distinctive transcriptomic profile. We are not trying to distinguish subtle molecular subtypes within a single organ; we are classifying tissues that express entirely different gene programs. This is consistent with published results on this same PANCAN dataset from the UCI repository, where accuracies of 95-100% are routinely reported across a variety of classification methods.</p>
+<p>High scores can be plausible for this benchmark because the five labels arise from distinct tissues, but that explanation is a hypothesis about this dataset rather than a clinical-performance guarantee. The reported checks reduce common leakage risks; independent cohorts and repeated splits would be required to assess robustness.</p>
 <hr>
 </section>
 </section>
 <section id="conclusion" class="level1">
 <h1>Conclusion</h1>
-<p>This study demonstrates that <strong>probabilistic classifiers combined with PCA</strong> can achieve excellent classification of five cancer types (BRCA, KIRC, COAD, LUAD, PRAD) from high-dimensional RNA-Seq gene expression data. Using a proper train/test split with PCA fitted exclusively on training data, LDA and QDA achieve 100% accuracy on the held-out test set, while Multinomial Logistic Regression and Naive Bayes reach 98.7% and 98.1% respectively. As shown in the validation section, these results are not artifacts: they survive permutation testing, degrade appropriately with fewer components, and are consistent with published benchmarks on this dataset.</p>
+<p>This study evaluates probabilistic classifiers combined with PCA for five cancer types (BRCA, KIRC, COAD, LUAD and PRAD). The reported values in the generated tables use a train/test split, train-only PCA, and fold-isolated cross-validation for PC selection. They are evidence about this dataset and split, not proof of clinical generalisation.</p>
 <section id="key-findings" class="level2">
 <h2 class="anchored" data-anchor-id="key-findings">Key Findings</h2>
 <ol type="1">
 <li><p><strong>A rigorous train/test split is essential.</strong> Computing PCA on the full dataset before cross-validation introduces data leakage, which can inflate accuracy estimates. By fitting PCA only on the training set (642 samples) and projecting the test set (159 samples) independently, we obtain honest generalization estimates.</p></li>
 <li><p><strong>PCA is essential, not optional.</strong> With <span class="math inline">\(p = 20{,}531\)</span> genes and only <span class="math inline">\(n = 801\)</span> samples, direct application of LDA, QDA, or logistic regression is mathematically impossible. PCA reduces the feature space while preserving the discriminative structure, as confirmed by the clear class separation visible in the first few principal components.</p></li>
-<li><p><strong>LDA and QDA are the strongest classifiers</strong>, both achieving 100% accuracy on the held-out test set. LDA reaches this with 50 PCs while QDA needs only 10, suggesting that class-specific covariance modelling helps in lower dimensions. LDA benefits from PCA’s orthogonal features, which align perfectly with its equal-covariance assumption.</p></li>
-<li><p><strong>Multinomial Logistic Regression</strong> achieves 98.7% test accuracy with just 10 PCs, misclassifying only 2 of 159 samples (BRCA/LUAD confusion). As a discriminative model, it directly learns decision boundaries without distributional assumptions, confirming the strong linear separability of the PCA-reduced features.</p></li>
-<li><p><strong>Naive Bayes degrades with more features</strong>, providing a textbook illustration of the curse of dimensionality. Its best CV accuracy is 97.5% at 10 PCs, dropping to 81% at 159 PCs. On the test set it achieves 98.1% at its optimal configuration. Its independence assumption becomes increasingly violated as more components are added.</p></li>
+<li><p><strong>Model ranking should follow the rendered training-CV and held-out tables.</strong> PCA coordinates are orthogonal, but that property does not guarantee the covariance assumptions of LDA or QDA.</p></li>
+<li><p><strong>Multinomial Logistic Regression</strong> is a discriminative comparison that learns decision boundaries in the selected PCA space; its current performance is displayed in the generated result tables.</p></li>
+<li><p><strong>Naive Bayes is evaluated across the same PC grid.</strong> Its independence assumption is not guaranteed by PCA, so any trend with component count should be read from the current cross-validation curve rather than a fixed narrative value.</p></li>
 <li><p><strong>The EDA was instrumental</strong> in guiding modeling decisions. The bimodal expression distribution and the large number of zero-variance genes motivated the filtering step before PCA. The ANOVA analysis confirmed that individual genes carry strong tissue-specific signals, and the correlation heatmap justified the use of PCA to handle multicollinearity.</p></li>
-<li><p><strong>The high accuracy is biologically grounded.</strong> The permutation test, the graceful degradation with fewer PCs, and the complete disjointness of the train/test sets confirm that these results are legitimate. The five cancer types originate from five distinct organs with fundamentally different gene expression programs, making near-perfect classification an expected outcome, consistent with published literature on this PANCAN benchmark.</p></li>
+<li><p><strong>The integrity checks are safeguards, not proof of generalisation.</strong> The fold isolation, train/test disjointness and sanity checks reduce common leakage risks; an external cohort would still be required before making clinical-performance claims.</p></li>
 </ol>
 </section>
 <section id="limitations-and-future-work" class="level2">
@@ -1316,7 +1339,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>The UMAP embedding reveals <strong>five distinct clusters</strong>, each corresponding to a cancer type. KIRC forms a tight, isolated cluster (sd &lt; 0.8 on both axes) far from all other classes. COAD and PRAD also form compact, well-separated groups. BRCA, the largest class (240 training samples), occupies a broader region in the center of the embedding, reflecting its higher internal variability. LUAD sits nearby, and the edges of the BRCA and LUAD clusters come very close (minimum distance ~0.04 between their nearest points), although their centers are well separated (~10.6 units apart). Compared to the PCA projection, where BRCA, COAD, and LUAD overlapped substantially in 2D, UMAP successfully resolves them into distinguishable regions.</p>
+<p>This UMAP plot is an exploratory visualization of the training data. It can suggest local neighbourhood structure, but its axes and global distances should not be used as quantitative evidence of class separation or classifier performance.</p>
 </section>
 <section id="umap-test-set-projection" class="level2">
 <h2 class="anchored" data-anchor-id="umap-test-set-projection">UMAP: Test Set Projection</h2>
@@ -1349,7 +1372,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>The test samples (bold triangles) land within or very near the training clusters (faded circles) of their respective cancer types. Out of 159 test samples, only 3 have a nearest training neighbor from a different class in UMAP space, and these are located at the edges where BRCA and LUAD nearly touch. This provides a strong visual confirmation that the held-out test data shares the same manifold structure as the training data, and that the near-perfect classification accuracy is geometrically justified.</p>
+<p>The overlay shows how this split projects into the UMAP fitted on the training partition. It is a visual diagnostic only: proximity in a UMAP embedding is not an independent validation of the classifiers or a measure of generalisation.</p>
 </section>
 <section id="umap-by-individual-class" class="level2">
 <h2 class="anchored" data-anchor-id="umap-by-individual-class">UMAP by Individual Class</h2>
@@ -1417,7 +1440,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>The density contours confirm that each cancer type forms a <strong>unimodal, well-concentrated region</strong>. KIRC, COAD, and PRAD show tight, concentric contours reflecting their compact clusters. BRCA displays the widest contours, consistent with its larger spread and sample count. The contour lines of BRCA and LUAD may approach each other at the boundary between these two classes, reflecting the small gap (~0.04 units) between their closest points. Despite this, the density peaks are well separated, reinforcing that the five cancer types occupy distinct regions of gene expression space.</p>
+<p>The contours summarize density in the two-dimensional visualization. They are descriptive; UMAP can distort global geometry, so this figure should not be treated as a statistical test of class separability.</p>
 </section>
 <section id="umap-vs-pca-side-by-side-comparison" class="level2">
 <h2 class="anchored" data-anchor-id="umap-vs-pca-side-by-side-comparison">UMAP vs PCA: Side-by-Side Comparison</h2>

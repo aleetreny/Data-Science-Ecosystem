@@ -41,7 +41,8 @@ This project folder contains the solution to a two-part problem set, both solved
 
 - **Objective:** Maximize total revenue from activities
 - **Decision Variables:** Production levels for 5 economic activities
-- **Constraints:** Resource consumption cannot exceed availability
+- **Constraints:** Resource balances follow the equalities specified in the
+  problem statement; this is not a generic capacity-inequality model.
 
 **Implementation:** The Jupyter_resolution.ipynb notebook implements this model in Gurobi. It also performs a detailed sensitivity analysis, examining:
 
@@ -60,7 +61,7 @@ This project folder contains the solution to a two-part problem set, both solved
 
 **Approach:** 
 - Minimize the sum of absolute deviations between predicted and actual values
-- Introduce binary error variables for over-prediction and under-prediction errors
+- Introduce non-negative continuous positive/negative deviation variables
 - Reformulate the absolute value objective as a linear function
 
 **Key Advantage:** This formulation is **more robust to outliers** than OLS regression because it uses absolute deviations instead of squared deviations.
@@ -116,8 +117,9 @@ Products have declining marginal profits (e.g., first 10 units earn €4/unit, r
 
 - **Optimal Production Plan:** Produce Products 1 and 2; do not produce Product 3
 - **Maximum Profit:** €284 net profit
-- **Bottleneck:** Resource 4 operates at 99.9% capacity
-- **Managerial Recommendation:** Expanding Resource 4 capacity would be the most effective way to increase profitability
+- **Near-bottleneck:** Resource 4 uses 1,188 of 1,200 units (99.0%).
+- **Managerial Recommendation:** Evaluate integer re-optimizations under
+  additional Resource 4 capacity before treating it as a binding bottleneck.
 
 **Files:**
 - Problem Statement 2.pdf: The full academic prompt with all problem data and constraints
