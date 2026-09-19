@@ -27,8 +27,16 @@ Rplots.pdf
 # These reports are reproducible from their sources but were not versioned
 # originally; keep the canonical notebook/QMD sources and their tracked assets.
 Classifying Dry Beans with Machine Learning/notebook.html
+Classifying Dry Beans with Machine Learning/notebook_files/
 PCA Kepler Dataset/Report.html
 PCA Kepler Dataset/Report.pdf
 PCA Kepler Dataset/Report_files/
 PCA Kepler Dataset/pca_3d_static.png
 PCA Kepler Dataset/temp_pca_3d.html
+
+# TrackML event CSVs are fetched separately.
+**/train_100_events/
+
+# UCI RNA-Seq data supplied separately or through RNA_SEQ_DATA_DIR.
+Probabilistic Cancer Classification via RNA-Seq Data/data.csv
+Probabilistic Cancer Classification via RNA-Seq Data/labels.csv

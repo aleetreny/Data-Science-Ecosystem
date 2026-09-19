@@ -51,7 +51,7 @@ library(webshot2)
 
 # --- Vetting and False Positive Flags ---
 # koi_fpflag_nt    # Not Transit-Like Flag [Unit: None] (Scale: Binary - 0 or 1)
-# koi_fpflag_ss    # Stellar-Stochastic Flag [Unit: None] (Scale: Binary - 0 or 1)
+# koi_fpflag_ss    # Stellar Eclipse Flag [Unit: None] (Scale: Binary - 0 or 1)
 
 # --- Transit / Orbital Parameters (Observed) ---
 # koi_period       # Orbital Period [Unit: days] (Scale: Continuous (Ratio))
@@ -81,13 +81,13 @@ df_koi <- read_csv("df_koi.csv", show_col_types = FALSE)
 # Select and rename the relevant columns
 df_selected = df_koi %>%
   select(
-    kepid,            # Kepler ID (Unique identifier)
+    kepid,            # Kepler ID (Target-star identifier; multiple KOIs can share it)
     koi_disposition,  # KOI Disposition (Candidate, Confirmed, False Positive)
     koi_fpflag_nt,    # Not Transit-Like (False positive flag)
-    koi_fpflag_ss,    # Stellar-Stochastic (False positive flag)
+    koi_fpflag_ss,    # Stellar Eclipse (False positive flag)
     koi_period,       # Orbital Period (days)
     koi_duration,     # Transit Duration (hours)
-    koi_depth,        # Transit Depth (percentage)
+    koi_depth,        # Transit Depth (ppm)
     koi_prad,         # Planetary Radius (Earth radii)
     koi_insol,        # Insolation Flux (light received by planet)
     koi_steff,        # Stellar Effective Temperature (Kelvin)
@@ -117,17 +117,8 @@ df_selected = df_koi %>%
 
 # STEP 2: Create derived variables (binary / multiclass) -----
 
-#
-# The following steps convert key continuous variables into discrete
-# binary or multi-class factors. We will not use them for the PCA computation,
-# only for latter interpretations
-#
-# Rationale:
-# 1. Capture non-linear relationships that a linear model (or PCA) might miss.
-# 2. Introduce domain-specific (astrophysical) knowledge into the model.
-# 3. Simplify complex features into interpretable, high-level concepts
-#    (e.g., "hot" vs. "cool", "large" vs. "small").
-#
+# These bins are interpretation aids derived from the measured variables.
+# They do not add independent information or validate the PCA.
 
 df_selected <- df_selected %>%
   mutate(
@@ -148,16 +139,7 @@ df_selected <- df_selected %>%
     # Justification: This is a deliberate, *astrophysically-informed* choice,
     # not a statistical one (like using the median).
     #
-    # In exoplanet science, a radius of 4 Earth-radii (4 R⊕) is a critical
-    # dividing line. It's the approximate boundary separating smaller "Super-Earths"
-    # (which are likely rocky or water-worlds) from "Neptune-sized" gas giants.
-    #
-    # Planets > 4 R⊕ are almost certain to have a significant gas envelope,
-    # making them fundamentally different in composition and formation.
-    # Using a statistical median here would be physically meaningless, as it
-    # would depend only on the dataset's specific distribution, not on the
-    # underlying physics of planet formation.
-    
+    # A descriptive radius threshold of 4 Earth radii; it does not identify composition.
     large_planet = if_else(radius_earth > 4, 1, 0),
     
     # --- 3. Statistical Multi-Class Discretization (Terciles) ---
@@ -170,21 +152,17 @@ df_selected <- df_selected %>%
     # to insolation.
     
     insolation_class = case_when(
+      is.na(insolation) ~ NA_character_,
       insolation < quantile(insolation, 0.33, na.rm = TRUE) ~ "low",
       insolation < quantile(insolation, 0.66, na.rm = TRUE) ~ "medium",
       TRUE ~ "high"
     ),
     
-    # --- 4. Statistical Multi-Class Discretization (Terciles) ---
-    #
-    # We bin 'magnitude' (brightness) into three equal-count groups.
-    # Note: Magnitude is an inverse scale; smaller numbers are brighter.
-    # Justification: This captures observational bias. 'bright' stars are
-    # easier to observe with higher signal-to-noise than 'dim' stars.
-    # Separating them allows the model to potentially account for
-    # different data quality levels or selection biases.
+# Brightness groups describe apparent magnitude. They do not adjust the
+# analysis for selection effects or measurement uncertainty.
     
     magnitude_class = case_when(
+      is.na(magnitude) ~ NA_character_,
       magnitude < quantile(magnitude, 0.33, na.rm = TRUE) ~ "bright", # < 33rd percentile is brightest
       magnitude < quantile(magnitude, 0.66, na.rm = TRUE) ~ "medium",
       TRUE ~ "dim"                                      # > 66th percentile is dimmest
@@ -218,9 +196,9 @@ pca_vars <- c(
 
 # Isolate these variables and remove any NA rows for a clean calculation
 # (PCA cannot handle missing values).
-df_numeric_pca <- df_selected %>%
-  select(all_of(pca_vars)) %>%
-  na.omit()
+pca_rows <- complete.cases(df_selected[, pca_vars])
+df_numeric_pca <- df_selected[pca_rows, pca_vars]
+stopifnot(all(vapply(df_numeric_pca, function(x) all(is.finite(x)) && sd(x) > 0, logical(1))))
 
 
 # STEP 4: Calculate the Covariance Matrix (S) of *Unstandardized* Data -----
@@ -284,7 +262,7 @@ variance_plot <- ggplot(variances_long, aes(x = reorder(Variable, -Variance), y 
   
   labs(
     title = "Variance Disparity of Raw KOI Variables (Log Scale)",
-    subtitle = "This plot demonstrates why standardization is mandatory for PCA.",
+    subtitle = "This plot demonstrates why standardization changes PCA variable weighting.",
     x = "Variable",
     y = "Variance (on log10 scale)"
   ) +
@@ -294,12 +272,8 @@ variance_plot <- ggplot(variances_long, aes(x = reorder(Variable, -Variance), y 
 # Display the plot
 print(variance_plot)
 
-# --- Note on "Negative" Variances in the Plot ---
-# The plot uses a log10 scale (scale_y_log10()).
-# Variances are never negative; bars appear negative only because
-# their true variance is a small number between 0 and 1
-# (e.g., log10(0.01) = -2).
-# This visual artifact *confirms* the massive scale disparity.
+# The vertical axis is logarithmic. Variances remain nonnegative;
+# values between zero and one have negative log10 coordinates.
 
 
 
@@ -346,10 +320,9 @@ q1 <- (1 - (min(eigenvalues) / max(eigenvalues)))^(p + 2)
 # Based on the harmonic mean of the eigenvalues.
 q2 <- 1 - (p / sum(1 / eigenvalues))
 
-# --- q3 ---
-# 1 - sqrt(|R|)
-# Based on the determinant of R. |R|=1 means no correlation.
-# |R|=0 means perfect correlation.
+# q3 = 1 - sqrt(det(R)). For a correlation matrix, det(R)=1 means
+# zero pairwise correlations; det(R)=0 means linear dependence.
+# Neither statement establishes statistical independence.
 q3 <- 1 - sqrt(det(R_matrix))
 
 # --- q4 ---
@@ -388,52 +361,8 @@ print("--- Overall Intercorrelation Measures (q1-q6) ---")
 print(intercorr_measures)
 
 #
-# The results are: (q1=0.52, q2=0.47, q3=0.78, q4=0.12, q5=0.94, q6=0.34)
-# They tell a specific and important story:
-#
-# 1. Is there correlation? YES.
-# 2. What kind? COMPLEX.
-#
-# Here is the breakdown for each measure:
-#
-# --- q1 (Eigenvalue Spread) = 0.542 ---
-# A medium score. It shows a significant spread between the
-# largest and smallest eigenvalues, but it's not an extreme
-# all-or-nothing scenario (like one component explaining everything).
-#
-# --- q2 (Harmonic Mean) = 0.486 ---
-# Also a medium score, similar to q1. It averages the
-# eigenvalue structure, and a medium value confirms that
-# the variance isn't concentrated in just one component.
-#
-# --- q3 (Determinant) = 0.763 ---
-# A HIGH score. This is a classic test for multicollinearity.
-# A value near 1 means the determinant |R| is very close to 0.
-# This is strong proof that the variables are *not* independent
-# and contain redundant information. **PCA is justified.**
-#
-# --- q4 (Max Eigenvalue) = 0.143 ---
-# A VERY LOW score. This is one of the most important findings.
-# It means the largest eigenvalue (max(lambda)) is *not*
-# dominant. PC1 will *not* explain 80-90% of the variance
-# (unlike the "Birds" example). The correlation structure
-# is complex, not a simple "size" component.
-# **Prediction:** We will need *multiple* components
-# to explain > 80% of the variance.
-#
-# --- q5 (Min Eigenvalue) = 0.934 ---
-# A VERY HIGH score. This confirms the story from q3.
-# It means the smallest eigenvalue (min(lambda)) is *extremely*
-# close to 0. This is the mathematical definition of
-# redundancy / multicollinearity. **PCA is strongly justified.**
-#
-# --- q6 (Avg. Variance Inflation) = 0.357 ---
-# A LOW-MEDIUM score. This suggests that while there is
-# multicollinearity (from q3/q5), it's not a simple case
-# where *all* variables are equally inflating each other.
-# The correlation is likely concentrated in specific clusters
-# of variables (which we will see in the correlation heatmap).
-#
+# These diagnostics use raw-variable correlations. q4 and q5 are not zero at R=I;
+# use the spectrum and retained variance rather than interpreting every score identically.
 
 # STEP 7: Create the Heatmap -----
 
@@ -455,7 +384,7 @@ corr_heatmap_matlab_style <- ggcorrplot(
   # 2. Show the FULL matrix 
   type = "full",
   
-  # 3. Do NOT show numeric labels
+  # 3. Show numeric correlation labels
   lab = TRUE,
   lab_size = 2.5,
   
@@ -463,16 +392,10 @@ corr_heatmap_matlab_style <- ggcorrplot(
   method = "square",
   
   # Set the legend limits to be exactly -1 to +1
-  legend.title = "Corr"
+  legend.title = "Correlation",
+  colors = c(col_neg, col_mid, col_pos),
+  legend.limit = c(-1, 1)
 ) +
-  scale_fill_gradient2(
-    low = col_neg,    # Purple for -1
-    mid = col_mid,    # White for 0
-    high = col_pos,   # Blue for +1
-    midpoint = 0,
-    limit = c(-1, 1),
-    name = "Correlation"
-  ) +
   
   theme_minimal(base_size = 10) + 
   theme(
@@ -494,11 +417,9 @@ print(corr_heatmap_matlab_style)
 # skewed (long right tails), which compresses most data points
 # into a small corner of the plot, making them look uncorrelated.
 
-# --- Solution: Apply Log Transformation (for Visualization Only) ---
-# As suggested in the methodology, we will apply a log transformation
-# to correct for this positive skewness. This will "zoom in" on the dense
-# areas and reveal the true correlations.
-# We will use log10(x + 1) to handle potential zero values (log10(0) is -Inf).
+# Apply log10(x + 1) to the eight nonnegative ratio-scale variables,
+# for both the scatterplot and PCA. This changes the analysis geometry;
+# logg and magnitude are already logarithmic and remain untransformed.
 
 # Apply log10 transformation to correct for positive skewness
 df_log <- df_numeric_pca %>%
@@ -527,81 +448,29 @@ pairs_plot_log <- ggpairs(
 
 print(pairs_plot_log)
 
-# --- Interpretation of the LOG-TRANSFORMED Scatter Plot Matrix ---
-#
-# Conclusion: This plot confirms our entire methodological approach.
-#
-# 1. **The Log Transform Worked:**
-#    The histograms on the diagonal ('diag') are no longer compressed
-#    at zero (based on previous experiments). We can see their true, 
-#    less-skewed distributions.
-#
-# 2. **The Variables ARE Correlated (PCA is Justified):**
-#    What were previously "L-shaped" or "smeared" points are now
-#    clear "clouds" and "lines". This *visually proves* that the
-#    variables contain redundant information.
-#
-# **Specific Examples of Physical Correlations Now Visible:**
-#
-# * **Strong Positive (Linear) Correlations:**
-#     - `radius_sun` vs. `mass_sun`: (Row 8, Col 9) A near-perfect line.
-#       More massive stars are larger.
-#     - `depth_ppm` vs. `radius_earth`: (Row 4, Col 5) Very clear.
-#       Larger planets block more light, causing deeper transits.
-#     - `teff_K` (Temp) vs. `radius_sun`: (Row 7, Col 8) Hotter
-#       stars tend to be larger.
-#
-# * **Strong Negative (Linear) Correlations:**
-#     - `logg` vs. `radius_sun`: (Row 10, Col 8) A clear negative
-#       line. For a given mass, a larger star (`radius_sun`)
-#       has a lower surface gravity (`logg`).
-#     - `magnitude` vs. `teff_K` / `radius_sun`: (Row 11, Cols 7/8)
-#       Reminder: magnitude is an *inverse* scale. The plot shows
-#       hotter, larger stars have a *lower* magnitude (i.e., are brighter).
-#
-# * **Lack of Correlation:**
-#     - `score` vs. (most physical variables): (Row 1) This is a
-#       diffuse, shapeless, showing no simple linear relationship
-#       between the signal's reliability and the system's physics.
-#
-# **Final Methodological Justification:**
-# - We've proven S is invalid (Step 1: different variances).
-# - We've proven PCA is valid (Step 2: this plot shows high correlation).
-#
-# **Next Step:**
-# We can now confidently run the PCA on the Correlation Matrix (R),
+# The scatterplot describes relationships after transformation. Correlated
+# inputs can be summarized by PCA, but this plot does not establish physical
+# causes or make covariance-based PCA invalid. Inspect the retained variance.
 
 
 # STEP 9: Apply Standardization  -----
 
 
-# --- Chosen Method: Z-Score Standardization ---
-#
-# **Rationale:** As established in the methodology, we must use the
-# correlation matrix (R) for PCA, not the covariance matrix (S).
-#
-# The `scale()` function in R performs the Z-score transformation:
-#   z = (x - mean(x)) / sd(x)
-#
-# This is the *exact* mathematical equivalent of "standardizing the
-# variables to mean zero and unit variance." This transformation
-# ensures every variable has a new variance of 1.
-#
-# This is the most standard, robust, and methodologically correct
-# choice for our dataset.
-#
+# We choose z-score standardization of the transformed variables so each
+# input has unit variance. This is a modeling choice that removes units;
+# it does not make PCA resistant to outliers or correct measurement error.
 
 # Apply the scaling to the same data used for the correlation diagnostics and
 # derived-label descriptions.  The log-transformed table above remains a
 # visualisation aid; silently changing the analysis population would make the
 # diagnostics and PCA answer different questions.
-df_scaled <- as.data.frame(scale(df_numeric_pca))
+df_scaled <- as.data.frame(scale(df_log))
 
 # Note that R matrix is equal to the S of the X standardized
 # The substraction of the matrix gives the Zero Matriz
 S_matrix_tr <- cov(df_scaled)
-R_matrix_scaled_input <- cor(df_numeric_pca)
-Zero_matrix <- round(S_matrix_tr - R_matrix_scaled_input, 0)
+R_matrix_scaled_input <- cor(df_log)
+stopifnot(max(abs(S_matrix_tr - R_matrix_scaled_input)) < 1e-10)
 
 # --- Verification of variances ---
 # Let's prove that our standardization worked.
@@ -619,15 +488,8 @@ print(scaled_variances)
 
 # Re-calculate R_matrix from standardized data to ensure consistency
 R_matrix <- cor(df_scaled)
-#
-# e.g., pca_result <- prcomp(df_scaled, center = FALSE, scale. = FALSE)
-#
-# Note: Because we *manually* centered and scaled, we would
-# turn those arguments OFF in prcomp.
-#
-# OR, we could have skipped this entire file and just run:
-# pca_result <- prcomp(df_numeric_pca, center = TRUE, scale. = TRUE)
-#
+# Equivalently, run prcomp(df_log, center=TRUE, scale.=TRUE).
+# Here centering and scaling are performed explicitly before prcomp.
 
 # STEP 10: Perform the Principal Component Analysis (PCA) -----
 
@@ -697,70 +559,8 @@ loadings_plot <- ggplot(loadings_df, aes(x = reorder(Variable, Loading), y = Loa
 print(loadings_plot)
 
 #
-# The PC1 and PC2 and PC3 and PC4 coefficients are the following:
-#
-#                   PC1    PC2    PC3    PC4
-# period_days    -0.077  0.564  0.323 -0.073
-# duration_hours  0.081  0.516  0.150  0.132
-# depth_ppm       0.036  0.343 -0.628  0.046
-# radius_earth    0.254  0.284 -0.560 -0.041
-# insolation      0.326 -0.459 -0.221  0.086
-# teff_K          0.269  0.042  0.069  0.773
-# radius_sun      0.467  0.039  0.088 -0.392
-# mass_sun        0.462  0.043  0.132  0.227
-# logg           -0.463 -0.044 -0.092  0.399
-# magnitude      -0.312  0.010 -0.280 -0.061
-#
-# --- Interpretation of PCs ---
-### PC1: "Stellar Scale"
-
-### PC1: "Stellar Scale"
-
-# Positive loadings:
-# - `radius_sun` (0.467), `mass_sun` (0.462), `teff_K` (0.269)
-
-# Negative loadings:
-# - `logg` (-0.463), `magnitude` (-0.312)
-
-# Interpretation: 
-# PC1 separates large, hot, bright stars (positive) from 
-# small, cool, dim stars (negative). 
-# It's a "stellar mass and size" axis.
-
-### PC2: "Orbital Dynamics"
-
-# Positive loadings:
-# - `period_days` (0.564), `duration_hours` (0.516)
-
-# Negative loadings:
-# - `insolation` (-0.459)
-
-# Interpretation: 
-# PC2 captures the planet's distance from its star. 
-# Distant planets have long periods and receive little energy (high PC2). 
-# Close planets orbit quickly and receive intense energy (low PC2). 
-# It's a "planetary distance" axis.
-
-### PC3: "Planetary Size & Signal Depth"
-
-# Negative loadings:
-# - `depth_ppm` (-0.628), `radius_earth` (-0.560)
-
-# Interpretation:
-# Large planets create deep transit signals. 
-# It's a "planet size" axis.
-
-### PC4: "Stellar Evolution"
-
-# Positive loadings:
-# - `teff_K` (0.773), `logg` (0.399)
-
-# Negative loadings:
-# - `radius_sun` (-0.392)
-
-# Interpretation:
-# This contrasts small, hot, dense stars against large, cooler stars. 
-# It captures **stellar evolutionary stage**—main sequence vs. evolved stars.
+# Interpret the coefficients printed above; signs can reverse across SVD implementations.
+# Component names are descriptive, not verified physical identities.
 
 # STEP 12: Decide How Many Components to Keep -----
 
@@ -780,7 +580,7 @@ print(loadings_plot)
 # The 'sdev' in pca_result are the standard deviations (sqrt(lambda)).
 # We must square them to get the eigenvalues.
 eigenvalues <- pca_result$sdev^2
-p <- length(eigenvalues) # Number of variables (p=11)
+p <- length(eigenvalues) # Number of variables (p=10)
 
 # Get the summary data (proportions)
 pca_summary_data <- summary(pca_result)$importance
@@ -812,11 +612,8 @@ kaiser_cutoff <- sum(eigenvalues > 1.0)
 cat("--- Method 2: Kaiser's Criterion ---\n")
 cat("Keep components with eigenvalue > 1.0. Keep:", kaiser_cutoff, "components\n")
 
-# --- 12.4: Method 3: Jolliffe's Criterion ---
-#
-# Rule: A modification for R-matrix, keep eigenvalues > 0.7.
-# This is often used when p <= 20 (we have p=11).
-#
+# Jolliffe's eigenvalue > 0.7 rule is a retention heuristic for standardized
+# PCA. There are ten analysis variables; compare this with retained variance.
 jolliffe_cutoff <- sum(eigenvalues > 0.7)
 
 cat("--- Method 3: Jolliffe's Criterion ---\n")
@@ -891,62 +688,13 @@ cumulative_plot <- ggplot(variance_df, aes(x = Component, y = Variance, group = 
 print(cumulative_plot)
 
 
-# We have a "vote" from four different methods, based on our
-# console output:
-#
-# 1. Kaiser's Criterion (lambda > 1.0):
-#    - Recommends: 4 components
-#
-# 2. Jolliffe's Criterion (lambda > 0.7):
-#    - Recommends: 4 components
-#
-# 3. 70% Variance Rule:
-#    - Recommends: 3 components
-#
-# 4. 80% Variance Rule:
-#    - Recommends: 4 components
-#
-# 5. Cattell's Scree Graph (Visual "Elbow"):
-#    - The plot shows a steep drop from PC1-PC4.
-#    - At PC4, there is a clear "shoulder" or "terrace,"
-#      which aligns perfectly with Kaiser's Cutoff.
-#    - The slope is still significant to PC5, after which
-#      the plot *truly* flattens into "scree." This
-#      aligns with Jolliffe's Cutoff.
-#
-# --- Interpretation & Final Decision ---
-#
-# This is a classic scenario.
-#
-# * The strong agreement between Jolliffe's criterion (4) and the 80%
-#   variance rule (4) suggests that 4 COMPONENTS is an excellent choice.
-#   It balances capturing a super-majority (+80%) of the "story"
-#   with a model that is still simple enough to interpret.
-#   This aligns with the visual "true elbow" after PC5.
-#
-#
-# --- Final Choice for this Analysis ---
-#
-# For the purpose of visualization and interpretation, any choice
-# between 3 or 4 components is well-justified. We will proceed
-# by visualizing the *most important* components (PC1 vs PC2, etc.)
-# to see the main data structures.
-#
-#
+# Compare the printed retention criteria; they need not agree. Four components are
+# displayed for interpretation, while the 80 percent rule is reported separately.
 
 # STEP 13: Visualize PC Scores (PC1 vs PC2 Scatter Plot) -----
 
-#
-# Our goal is to see if the new dimensions (PC1, PC2) separate
-# our data into meaningful groups.
-#
-# We will create a scatter plot of PC1 vs PC2, but we will
-# color the points using the 'disposition' variable
-# (CONFIRMED, CANDIDATE, FALSE POSITIVE).
-#
-# This is the "moment of truth": did our PCA find a
-# structure that can tell these groups apart?
-#
+# Color the first two component scores by disposition to describe overlap.
+# This is an exploratory plot, not a held-out classification evaluation.
 
 # --- 13.1: Create the Plotting Data Frame ---
 
@@ -962,24 +710,9 @@ pca_scores_df <- as.data.frame(pca_result$x)
 #    'na.omit()' step, but this time selecting the
 #    labels *before* omitting NAs.
 
-df_labels_clean <- df_selected %>%
-  select(
-    # The labels we want to use for coloring/faceting
-    disposition,
-    large_planet,
-    hot_star,
-    insolation_class,
-    magnitude_class,
-    
-    # We *must* include the original pca_vars to filter NAs
-    all_of(pca_vars)
-  ) %>%
-  na.omit() # This removes the *exact same rows* as df_numeric_pca
+df_labels_clean <- df_selected[pca_rows, ]
+stopifnot(nrow(pca_scores_df) == nrow(df_labels_clean))
 
-# 3. Combine the scores and labels.
-# Because both data frames were derived from the same
-# base and omission steps, they have the same number of
-# rows (7909) in the same order.
 plot_df <- cbind(
   pca_scores_df,  # The PC1, PC2... coordinates
   df_labels_clean # The corresponding labels
@@ -1005,7 +738,7 @@ pc1_v_pc2_plot <- ggplot(plot_df, aes(x = PC1, y = PC2, color = disposition)) +
   labs(
     title = "PCA Scatter Plot: PC1 vs PC2",
     subtitle = "Colored by KOI Disposition (Points + Density Contours)",
-    x = "PC1 - 'Stellar Scale' (Low = Large/Hot, High = Small/Dim)",
+    x = "PC1 (see current loadings for orientation)",
     y = "PC2 - 'Stellar/Orbit Properties'",
     color = "KOI Disposition"
   ) +
@@ -1054,41 +787,23 @@ pca_3d_cloud <- plot_ly(
   marker = list(size = 1.5, opacity = 0.3, line = list(width = 0))
 ) %>%
   layout(
-    title = "PCA 3D Group Density",
+    title = "PCA Scores by KOI Disposition",
     scene = list(
-      xaxis = list(title = "PC1 - Stellar Scale"),
-      yaxis = list(title = "PC2 - Orbital Distance"),
-      zaxis = list(title = "PC3 - Planet Size")
+      camera = list(eye = list(x = 1.65, y = 1.65, z = 1.65)),
+      xaxis = list(title = "PC1"),
+      yaxis = list(title = "PC2"),
+      zaxis = list(title = "PC3")
     ),
     legend = list(title = list(text = "KOI Disposition"))
   )
 
 print(pca_3d_cloud)
 
-# STEP 14: Statistical Proof of Separation (Kruskal-Wallis Test) -----
+# STEP 14: Exploratory Distribution Comparisons (Kruskal-Wallis Test) -----
 
-#
-# ANALYSIS OF STEP 13:
-# The scatter plot in Step 13 is visually INCONCLUSIVE.
-# As seen in the output image, the vast number of points,
-# high overlap, and "zooming out" caused by outliers
-# makes it impossible to see if the groups are truly separate.
-# The 'CONFIRMED' and 'CANDIDATE' groups are completely
-# obscured by the 'FALSE POSITIVE' blob.
-#
-# THE SOLUTION:
-# We need a formal "metric" to prove utility. Instead of
-# relying on a visual plot, we will use a statistical test
-# to determine if the *medians* of the groups are
-# statistically different in the new PCA space.
-#
-# We will use the Kruskal-Wallis test (a non-parametric ANOVA)
-# to test the null hypothesis: "The medians of all 3 groups
-# (CONFIRMED, CANDIDATE, FALSE POSITIVE) are the same."
-#
-# A tiny p-value will reject this hypothesis and PROVE that
-# the groups are measurably different.
-#
+# Kruskal-Wallis compares rank distributions of component scores across
+# disposition groups. A median-shift interpretation needs comparable shapes.
+# Small p-values do not measure classification accuracy or useful separation.
 
 # --- 14.1: The Formal "Metric" (Statistical Test) ---
 # We will use the 'plot_df' data frame we created in Step 13,
@@ -1106,45 +821,26 @@ print(pc2_test)
 
 # Test for PC3
 pc3_test <- kruskal.test(PC3 ~ disposition, data = plot_df)
-cat("\n--- Kruskal-Wallis Test for PC2 ---\n")
+cat("\n--- Kruskal-Wallis Test for PC3 ---\n")
 print(pc3_test)
+cat("Holm-adjusted p-values for the three disposition comparisons:\n")
+print(p.adjust(c(PC1=pc1_test$p.value, PC2=pc2_test$p.value, PC3=pc3_test$p.value), method="holm"))
 
 
-# --- 14.2: Interpretation of the Statistical Test ---
-#
-# CONSOLE OUTPUT:
-#
-#   Kruskal-Wallis chi-squared = 627.42, df = 2, p-value < 2.2e-16
-#   Kruskal-Wallis chi-squared = 29.044, df = 2, p-value < 4.933e-07
-#   Kruskal-Wallis chi-squared = 1130.1, df = 2, p-value < 2.2e-16
-#
-# INTERPRETATION:
-# This is the "metric" that proves the PCA's utility.
-#
-# 1. A p-value of '< 2.2e-16' or '<4.933e-07' is scientific notation for a number
-#    that is practically zero (0.000... with 16 or 7 zeros).
-#
-# 2. This means the probability of seeing this separation *purely*
-#    *by random chance* is zero.
-#
-# 3. CONCLUSION: We have just statistically PROVEN that the
-#    medians of the groups ARE different. The visual overlap
-#    (the "noise") is high, but the underlying "signal"
-#    (the median separation) is real and statistically significant.
-#
-# The PCA was a SUCCESS. It found a new dimension (PC1) that
-# can distinguish 'FALSE POSITIVE' from the other groups.
-#
+
+# Read the computed tests above rather than cached statistics. These tests
+# are descriptive, conditional on this sample and representation. A p-value
+# is not the probability that a finding arose by chance or that a null is true.
 
 
 
 # STEP 15: The Loadings Plot (The "Variable-Only" Biplot) -----
 
 
-# --- 15.1: Get the Loadings Data ---
-# We use the 'rotation' matrix (the loadings) from our pca_result.
-# This contains the (PC1, PC2, ...) coordinates for each arrow's end.
-loadings_df <- as.data.frame(pca_result$rotation) %>%
+# For the correlation circle, multiply each eigenvector coefficient by
+# the component standard deviation. Raw rotation entries alone are not
+# correlations between standardized variables and component scores.
+loadings_df <- as.data.frame(sweep(pca_result$rotation, 2, pca_result$sdev, "*")) %>%
   rownames_to_column(var = "Variable")
 
 # --- 15.2: Create the Plot ---
@@ -1183,7 +879,7 @@ loadings_arrow_plot <- ggplot(loadings_df, aes(x = PC1, y = PC2, label = Variabl
   coord_fixed(ratio = 1) +
   
   labs(
-    title = "PCA Loadings Plot (PC1 vs PC2)",
+    title = "Variable-PC Correlation Circle",
     subtitle = "Arrows show the direction of original variables in the PCA space",
     x = "PC1 - 'Stellar Scale' ",
     y = "PC2 - 'Stellar/Orbit Properties'"
@@ -1193,13 +889,10 @@ loadings_arrow_plot <- ggplot(loadings_df, aes(x = PC1, y = PC2, label = Variabl
 # Display the plot
 print(loadings_arrow_plot)
 
-# --- 15.3: How to Interpret this Plot ---
-#
-#  - Top-right: Stellar properties (`mass_sun`, `radius_sun`) point right (large stars)
-#  - Top: Orbital properties (`period_days`, `duration_hours`) point up (wide orbits)
-#  - Bottom-left: `insolation` points down-left (close, hot planets around small stars)
-#  - The 90-degree angle** between stellar and orbital vectors proves 
-#     they're **independent**—the PCA has successfully decoupled them
+# Arrow endpoints are variable-component correlations. Angles approximate
+# variable correlations only to the extent that this plane represents them.
+# Perpendicular projected arrows do not demonstrate independence. Axis signs
+# may reverse without changing the PCA.
 
 
 
@@ -1217,7 +910,7 @@ print(loadings_arrow_plot)
 # We need to format the label for the plot
 plot_df$large_planet_label <- factor(plot_df$large_planet,
                                      levels = c(0, 1),
-                                     labels = c("Small/Medium (R < 4)", "Large (R > 4)"))
+                                     labels = c("Small/Medium (R <= 4)", "Large (R > 4)"))
 
 faceted_density_planet <- ggplot(plot_df, aes(x = PC1, y = PC2)) +
   
@@ -1262,45 +955,9 @@ faceted_density_insolation <- ggplot(plot_df, aes(x = PC1, y = PC2)) +
 
 print(faceted_density_insolation)
 
-# --- 16.3: Interpretation ---
-#
-# We have generated the plots from Step 16.1 and 16.2.
-# The following is a visual analysis of the results.
-#
-# --- Test 1: 'large_planet' (Image 1) ---
-##
-# * The 'Small/Medium (R < 4)' panel shows a dense blob
-#   centered at a lower PC2 value (approx. PC2 = -1).
-#
-# * The 'Large (R > 4)' panel shows a less dense blob (as
-#   there are fewer large planets) that is clearly *shifted*
-#   *up* to a higher PC2 value (approx. PC2 = 0).
-#
-# * CONCLUSION: This is a fantastic finding. PC2
-#   (our 'Stellar/Orbit Properties' component) has
-#   successfully captured a signal related to planet size,
-#   even though the 'radius_earth' loading was not dominant.
-#   It shows large planets have systematically higher PC2 scores.
-#
-# --- Test 2: 'insolation_class' (Image 2) ---
-#
-# The key finding is the *location shift*, which
-# *perfectly confirms* our Step 15 Loadings Plot.
-#
-# * RECALL (Step 15): The 'insolation' arrow pointed
-#   to the **bottom-right** (positive PC1, negative PC2).
-#
-# * CHECK THE PLOT:
-#   1. The 'high' insolation blob (top-left panel) is
-#      centered *further down* (lower PC2 score, approx -2)
-#      than 'low' and 'medium' (centered at PC2 approx 1 and 0).
-#   2. This **visually confirms** the PC2 relationship:
-#
-#
-# * FINAL CONCLUSION: This faceted density approach
-#   was a success. It visually confirms our loadings plot (Step 15)
-#   and proves that our new PC dimensions are separating the
-#   data based on our derived binary/multiclass groupings.
+# These faceted densities summarize score distributions for input-derived
+# groups. Inspect them alongside the loadings and overlap; a radius or
+# insolation association is expected when those inputs also enter the PCA.
 
 
 
@@ -1330,17 +987,8 @@ plot_df_long_all <- plot_df %>%
     values_to = "Score"
   )
 
-# --- 17.2: Ridge Plot for 'hot_star' (Zoomed) ---
-#
-# INTERPRETATION (Based on your plot):
-# The plot clearly shows the separation.
-# - PC1: The "Hot Star" (blue) peak is shifted RIGHT (positive)
-#   of the "Cool Star" (red) peak.
-# - PC2: They are almost the same
-# - PC3/PC4: The same happens as with PC1
-# This perfectly confirms our 'teff_K' (hot) arrow from
-# Step 15, which pointed RIGHT (but was orthogonal to PC2)
-#
+# Ridge plots display temperature-group score distributions. The hot/cool
+# threshold is sample-relative and derives from an input to the PCA.
 ridge_plot_hot_star <- plot_df_long_all %>%
   filter(Variable_Group == "hot_star") %>%
   ggplot(aes(x = Score, y = Class_Label, fill = Class_Label)) +
@@ -1363,30 +1011,9 @@ ridge_plot_hot_star <- plot_df_long_all %>%
 
 print(ridge_plot_hot_star)
 
-# --- 17.3: Ridge Plot for 'magnitude_class'  ---
-#
-# This plot shows a perfect "primary" signal and a "secondary" signal.
-#
-# * PC1 (The Primary Signal):
-#   The separation is crystal clear. "bright" (blue)
-#   is shifted RIGHT (positive), "medium" (pink) is in the
-#   center, and "dim" (yellow) is shifted LEFT (negative).
-#   This confirms PC1 is the main 'magnitude' component.
-#
-# * PC2 & PC4:
-#   These show no signal. All three distributions are stacked
-#   identically, showing they are not related to magnitude.
-#
-# * PC3 (The Secondary Signal):
-#   This is a subtle but important finding. The 'bright' and
-#   'medium' peaks are stacked, but the 'dim' (yellow)
-#   distribution is *visibly shifted to the left* (negative).
-#   This means PC3 has also captured a small, secondary
-#   relationship for dim stars.
-#
-# CONCLUSION: This is a 100% confirmation: PC1 is *strongly*
-# related to the 'magnitude' of the star, and PC3
-# has also isolated a minor, secondary part of that signal.
+# Brightness-group densities describe apparent magnitude associations.
+# Their shifts depend on component signs and do not establish causation
+# or independent validation of the representation.
 
 ridge_plot_magnitude <- plot_df_long_all %>%
   filter(Variable_Group == "magnitude_class") %>%
@@ -1441,7 +1068,8 @@ all_tests_summary <- all_combinations %>%
   ) %>%
   ungroup() %>% # Stop the row-wise operation
   unnest(test_result) %>% # Expand the tidy results from the list-column
-  select(Variable_Group, Component, p.value) # Keep only the columns we need
+  select(Variable_Group, Component, p.value) %>%
+  mutate(p.value = p.adjust(p.value, method = "holm")) # Keep only the columns we need
 
 
 # --- 18.3: Format and Print the Summary Table ---
@@ -1456,20 +1084,12 @@ final_p_value_table <- all_tests_summary %>%
   # Re-order columns
   select(Variable_Group, PC1, PC2, PC3, PC4)
 
-cat("--- FINAL SUMMARY: Kruskal-Wallis p-values ---\n")
+cat("--- FINAL SUMMARY: Kruskal-Wallis p-values (Holm adjusted across 16 tests) ---\n")
 print(final_p_value_table)
 
 
-# --- FINAL SUMMARY: Kruskal-Wallis p-values ---
-#
-#   Variable_Group       PC1      PC2      PC3      PC4     
-# <chr>                  <chr>    <chr>    <chr>    <chr>   
-# 1 hot_star         < 1e-100 3.3e-05  2.0e-23  < 1e-100
-# 2 insolation_class < 1e-100 < 1e-100 < 1e-100 < 1e-100
-# 3 large_planet     < 1e-100 < 1e-100 < 1e-100 4.0e-14 
-# 4 magnitude_class  < 1e-100 0.11     < 1e-100 4.0e-30
-#
-#
+# Printed adjusted p-values above belong to this execution.
+
 # --- 18.1: Definitive Interpretation of P-Value Table ---
 #
 # These are descriptive associations, not an external validation of PCA.

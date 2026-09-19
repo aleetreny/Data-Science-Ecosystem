@@ -1,50 +1,47 @@
 # Probabilistic Cancer Classification via RNA-Seq Data
 
-You can view the complete project report directly by opening the [`notebook.html`](notebook.html) file in your browser.
+Open the complete [HTML report](index.html), generated from [notebook.qmd](notebook.qmd).
 
-This project focuses on applying **Statistical Learning** techniques for the multiclass classification of different cancer types using gene expression data (**RNA-Seq**). The goal is to develop a model capable of **correctly classifying the origin of tumor tissue** based solely on its gene expression profile.
+This exploratory study classifies five tumor labels from gene expression in the
+UCI TCGA Pan-Cancer snapshot: 801 samples, 20,531 genes, and the BRCA, KIRC,
+COAD, LUAD and PRAD classes. It evaluates this dataset, not clinical diagnosis
+or performance on an independent patient cohort.
 
-## Dataset
+## Data and execution
 
-This project utilizes an extraction of the **TCGA Pan-Cancer (PANCAN)** dataset.
+Download the [UCI Gene Expression Cancer RNA-Seq dataset](https://archive.ics.uci.edu/dataset/401/gene+expression+cancer+rna+seq).
+Extract the ZIP and its nested archive until `data.csv` and `labels.csv` are
+available. Put both beside the notebook, or set `RNA_SEQ_DATA_DIR` to their
+directory. The loader checks unique sample identifiers, matching sample sets
+and finite measurements before joining labels by identifier.
 
-### How to obtain the data
+Use the shared [R/Quarto environment](../RUNNING.md), including `tidyverse`,
+`caret`, `MASS`, `e1071`, `naivebayes`, `nnet`, `factoextra`, `DT`, `pheatmap`,
+`uwot` and `patchwork`. From this directory run:
 
-1. Go to the [UCI Machine Learning Repository - Gene Expression Cancer RNA-Seq Dataset](https://archive.ics.uci.edu/dataset/401/gene+expression+cancer+rna+seq).
-2. Click on the **Download** button.
-3. Extract the downloaded zip file.
-4. You will need two specific files:
-   - `data.csv`: The gene expression matrix.
-   - `labels.csv`: The class labels for each sample.
-5. Place these two files (`data.csv` and `labels.csv`) in the root directory of this project.
+```bash
+quarto render notebook.qmd --to html
+```
 
-### Dataset Characteristics
+## Evaluation
 
-- **Samples:** 801 individuals diagnosed with a type of tumor.
-- **Variables:** 20,531 genes.
-- **Classes:** 5 distinct tumor types (BRCA, KIRC, COAD, LUAD, PRAD).
+The seeded stratified split contains 642 training and 159 test samples.
+Exploratory feature comparisons use training samples only. Ten-fold training
+cross-validation selects the number of principal components separately for
+each model, fitting scaling and PCA inside every fold. The chosen pipelines
+are then refitted on all training samples and evaluated on the held-out test.
 
-## Methodology
+| Model | Selected PCs | Test accuracy |
+|---|---:|---:|
+| Linear discriminant analysis | 100 | 100.00% |
+| Quadratic discriminant analysis | 10 | 100.00% |
+| Multinomial logistic regression | 50 | 100.00% |
+| Gaussian naive Bayes | 50 | 97.48% |
 
-To handle the high dimensionality of the data ($p \gg n$), we employ **Dimensionality Reduction** using **Principal Component Analysis (PCA)**. We then implement and compare the following probabilistic models:
-
-1. **Linear Discriminant Analysis (LDA)**
-2. **Quadratic Discriminant Analysis (QDA)**
-3. **Naive Bayes**
-4. **Multinomial Logistic Regression**
-
-## Results
-
-- **LDA** and **QDA** achieved **100% accuracy** on the held-out test set.
-- **Multinomial Logistic Regression** achieved **98.7% accuracy**.
-- **Naive Bayes** achieved **98.1% accuracy**.
-
-These results demonstrate that the gene expression profiles of these five cancer types are highly distinct and can be accurately classified using probabilistic methods combined with PCA.
-
-## How to Run
-
-This project is structured as a **Quarto** notebook.
-
-1. Ensure you have R installed along with the required packages: `tidyverse`, `caret`, `MASS`, `e1071`, `naivebayes`, `nnet`, `factoextra`, `DT`, `pheatmap`, and `uwot`.
-2. Open `notebook.qmd` in RStudio or VS Code (with Quarto extension).
-3. Render the notebook to HTML or run the code chunks interactively.
+The notebook checks covariance feasibility, logistic convergence and absence
+of sample-ID or exact feature-vector overlap. A fixed 50-PC label-shuffling
+control scores 28.93%, compared with a 37.74% majority baseline. These checks
+can expose simple pipeline errors; they do not exclude unrecorded batch,
+cohort or biological dependencies. The high test accuracies apply to this
+single partition. Repeated external-cohort evaluation would be needed for a
+broader performance claim.

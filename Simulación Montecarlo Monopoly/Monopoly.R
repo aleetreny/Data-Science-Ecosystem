@@ -204,6 +204,7 @@ procesar_caja <- function(pos_actual) {
 # ------------------------------------------------------------------------------
 
 simular_monopoly <- function(n_turnos) {
+  stopifnot(length(n_turnos) == 1, is.finite(n_turnos), n_turnos >= 1, n_turnos == floor(n_turnos))
 
   posicion <- 1
   conteo_dobles <- 0
@@ -221,6 +222,7 @@ simular_monopoly <- function(n_turnos) {
 
     # Jail is a state, not merely square 11. A prisoner leaves by rolling
     # doubles or after the third failed attempt, then moves with that roll.
+    venia_de_carcel <- encarcelado
     if (encarcelado) {
       if (es_doble || turnos_carcel == 2) {
         encarcelado <- FALSE
@@ -234,7 +236,7 @@ simular_monopoly <- function(n_turnos) {
     }
 
     # Regla de velocidad (3 dobles consecutivos)
-    if (es_doble) {
+    if (es_doble && !venia_de_carcel) {
       conteo_dobles <- conteo_dobles + 1
     } else {
       conteo_dobles <- 0
@@ -292,6 +294,7 @@ simular_monopoly <- function(n_turnos) {
     }
 
     # Registro del evento
+    if (encarcelado) conteo_dobles <- 0
     historial[posicion] <- historial[posicion] + 1
   }
 
@@ -308,6 +311,7 @@ set.seed(42) # Semilla fijada para reproducibilidad exacta
 
 # Ejecución de la simulación
 visitas_raw <- simular_monopoly(N_TURNOS)
+stopifnot(sum(visitas_raw) == N_TURNOS, all(visitas_raw >= 0), visitas_raw[31] == 0)
 
 # Integración en el dataframe maestro
 # Se incluye 'conteo' (número absoluto de caídas) y 'probabilidad' (porcentaje)
@@ -333,11 +337,11 @@ print(head(tablero_resultados %>% select(nombre, grupo, conteo, probabilidad), 1
 
 # Para determinar la rentabilidad real, no basta con el precio de alquiler.
 # Se debe ponderar el alquiler por la frecuencia de visita.
-# Métrica Clave: "Valor Esperado por Turno" (Expected Value per Turn - EV)
+# Métrica Clave: "Valor Esperado por Tirada" (Expected Value per Roll - EV)
 # Fórmula: EV = Alquiler * (Probabilidad / 100)
 
 analisis_financiero <- tablero_resultados %>%
-  filter(es_comprable) %>% # Descartamos casillas no comprables (Impuestos, etc)
+  filter(es_comprable, grupo != "Blanco") %>% # Servicios excluidos: alquiler depende de dados y cartas
   mutate(
     # ESCENARIO: ESTRATEGIA DE 3 CASAS (Punto óptimo de inversión en Monopoly)
     # Nota: Para estaciones, la columna 'alq_3_casas' representa tener las 4 estaciones.
@@ -349,7 +353,7 @@ analisis_financiero <- tablero_resultados %>%
     retorno_esperado_turno = alq_3_casas * (probabilidad / 100),
 
     # 3. Ratio de Eficiencia (ROI)
-    # Interpretación: Porcentaje de la inversión recuperada en cada turno promedio.
+    # Interpretación: Porcentaje de la inversión recuperada por tirada.
     # Un valor más alto indica una recuperación de capital más rápida.
     ratio_eficiencia = (retorno_esperado_turno / inversion_total) * 100
   )
@@ -365,7 +369,7 @@ ranking_colores <- analisis_financiero %>%
     # Coste para adquirir y desarrollar el monopolio completo
     coste_grupo_completo = sum(inversion_total),
 
-    # Dinero total que se espera ganar por turno con el grupo completo
+    # Dinero total que se espera ganar por tirada con el grupo completo
     retorno_grupo_esperado = sum(retorno_esperado_turno),
 
     # Probabilidad acumulada de que un rival caiga en CUALQUIER casilla del grupo
@@ -425,8 +429,8 @@ g2 <- ggplot(ranking_colores, aes(x = reorder(grupo, eficiencia_global), y = efi
     title = "Retorno de Inversión (ROI) por Grupo de Color",
     subtitle = "Eficiencia basada en estrategia de 3 Casas (o 4 Estaciones)",
     x = "Grupo de Propiedades",
-    y = "Índice de Eficiencia (% recuperado por turno)",
-    caption = "Nota: El grupo Naranja maximiza el ROI debido a su posición estratégica post-Cárcel."
+    y = "Índice de Eficiencia (% recuperado por tirada)",
+    caption = "Comparación bajo el modelo simplificado; consulta los valores calculados."
   ) +
   theme_minimal() +
   theme(legend.position = "none")
@@ -458,6 +462,7 @@ datos_casas <- tablero_resultados %>%
       nivel_casa == "alq_hotel" ~ 5
     ),
     inversion_acumulada = precio_compra + (num_casas * precio_edificar),
+    alquiler = if_else(num_casas == 0, 2 * alquiler, alquiler),
     retorno_esperado = alquiler * (probabilidad / 100)
   ) %>%
   arrange(nombre, num_casas) %>%
@@ -472,7 +477,7 @@ datos_casas <- tablero_resultados %>%
 resumen_estrategia <- datos_casas %>%
   group_by(grupo, num_casas) %>%
   summarise(
-    turnos_promedio = mean(turnos_recuperacion, na.rm = TRUE),
+    turnos_promedio = sum(inversion_marginal) / sum(retorno_marginal),
     .groups = "drop"
   )
 
@@ -507,11 +512,11 @@ g3 <- ggplot(resumen_estrategia, aes(x = num_casas, y = turnos_promedio, group =
   coord_cartesian(ylim = c(0, 150)) +
 
   labs(
-    title = "Curva de Rentabilidad: El 'Punto Dulce' de las 3 Casas",
-    subtitle = "Turnos para recuperar inversión. Cuanto más baja la curva, más rápido ganas dinero.",
+    title = "Recuperación Marginal de la Inversión por Nivel",
+    subtitle = "Tiradas esperadas para recuperar la inversión marginal.",
     x = "Nivel de Edificación (H = Hotel)",
-    y = "Turnos Promedio (Break-Even)",
-    caption = "Nota: Observa cómo la mayoría de curvas tocan fondo en la 3ª casa."
+    y = "Tiradas Esperadas para Recuperar el Incremento",
+    caption = "Se supone posesión del grupo completo; se omiten negociación y escasez de casas."
   ) +
   theme_minimal() +
   theme(
@@ -578,8 +583,8 @@ g4 <- ggplot(analisis_cuadrante, aes(x = capital_total_3casas, y = retorno_esper
     title = "Matriz de Eficiencia de Capital",
     subtitle = "Comparativa: Coste de Desarrollo (3 casas) vs. Retorno Esperado",
     x = "Capital Total Necesario",
-    y = "Retorno Esperado por Turno (Ev)",
-    caption = "Estrategia Óptima: Grupos en la zona superior izquierda."
+    y = "Retorno Esperado por Tirada (EUR)",
+    caption = "Zona superior izquierda: menor coste y mayor renta esperada bajo estos supuestos."
   ) +
   theme_minimal() +
   theme(legend.position = "none")
@@ -706,6 +711,7 @@ simular_supervivencia_dinamica <- function(n_rivales, n_turnos_max) {
 }
 
 # Ejecutamos la simulación dinámica
+set.seed(43) # Independiente del número de tiradas de la primera simulación
 datos_dinamicos <- simular_supervivencia_dinamica(n_rivales = 3000, n_turnos_max = 120)
 
 
@@ -732,11 +738,11 @@ g6 <- ggplot(datos_dinamicos, aes(x = turno, y = porcentaje_vivos, color = grupo
   )) +
 
   labs(
-    title = "Curva de Supervivencia Dinámica (Escalado Realista)",
-    subtitle = "% de 1000 Rivales vivos a medida que la partida avanza y se construyen casas",
-    x = "Turnos de Juego",
+    title = "Supervivencia en un Escenario de Pagos Independientes",
+    subtitle = "Porcentaje de 3000 rivales simulados por grupo; pagos independientes y fases fijadas",
+    x = "Pasos del escenario de pagos",
     y = "% de Supervivencia",
-    caption = "Observa cómo la pendiente se vuelve agresiva a partir del Turno 40 (Fase Letal)."
+    caption = "A partir del paso 41 se aplican las rentas de tres casas."
   ) +
   theme_minimal() +
   theme(legend.position = "bottom")
@@ -752,7 +758,7 @@ print(g6)
 # Usamos el Valor Esperado (Probabilidad x Dinero).
 
 datos_skyline <- tablero_resultados %>%
-  filter(es_comprable) %>% # Solo propiedades
+  filter(es_comprable, grupo != "Blanco") %>% # Servicios excluidos de renta fija
   mutate(
     # Altura del edificio = Cuánto dinero aporta esta casilla al juego
     # Usamos 3 Casas como estándar
@@ -790,13 +796,13 @@ g7 <- ggplot(datos_skyline, aes(x = id_ordenado, y = valor_generado, fill = grup
   
   # Ajustes de ejes
   scale_y_continuous(expand = expansion(mult = c(0, 0.3))) + # Margen arriba para etiquetas
-  scale_x_continuous(breaks = c(1, 10, 20, 30, 40), labels = c("Salida", "Cárcel", "Parking", "Ir a Cárcel", "Final")) +
+  scale_x_continuous(breaks = c(1, 11, 21, 31, 40), labels = c("Salida", "Cárcel", "Parking", "Ir a Cárcel", "Final")) +
   
   labs(
     title = "El Skyline del Tablero: ¿Dónde se genera el dinero?",
-    subtitle = "Altura de la barra = Rentabilidad Real (Frecuencia x Alquiler 3 casas)",
+    subtitle = "Altura de la barra = Renta Esperada Simplificada (Frecuencia x Alquiler 3 casas)",
     x = "Recorrido del Tablero (De la Salida al Final)",
-    y = "Valor Generado por Turno (EUR)"
+    y = "Valor Esperado por Tirada (EUR)"
   ) +
   theme_minimal() +
   theme(

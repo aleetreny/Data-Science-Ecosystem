@@ -1,0 +1,13 @@
+title: "Production Planning with Mixed Integer Linear Programming"
+author: "Alejandro Treny Ortega"
+format:
+  pdf:
+    pdf-engine: xelatex
+    documentclass: article
+    papersize: a4
+    geometry: margin=22mm
+    fontsize: 10pt
+    colorlinks: true
+execute:
+  echo: false
+  warning: true

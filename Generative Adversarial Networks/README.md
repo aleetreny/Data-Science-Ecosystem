@@ -1,6 +1,6 @@
 # Project Genesis: Deep Convolutional GAN (DCGAN)
 
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
+![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-orange)
 
 > **"We are not teaching a machine to analyze; we are teaching it to create."**
@@ -9,11 +9,11 @@
 
 **Project Genesis** explores the frontier of **Generative Artificial Intelligence**. Unlike traditional classifiers that label data (e.g., "This is a 7"), this project builds an autonomous agent capable of "dreaming" handwritten digits from pure random noise.
 
-Using a **Deep Convolutional Generative Adversarial Network (DCGAN)**, we set up a zero-sum game between two neural networks. The system can produce synthetic MNIST-like images; visual samples alone do not demonstrate indistinguishability, generalization, or convergence to a Nash equilibrium.
+Using a **Deep Convolutional Generative Adversarial Network (DCGAN)**, we train two competing neural networks with binary cross entropy and a non-saturating generator objective. The system can produce synthetic MNIST-like images; visual samples alone do not demonstrate indistinguishability, generalization, or convergence to a Nash equilibrium.
 
 ## The Concept: Adversarial Learning
 
-The core of this project is a "Minimax Game" between two adversaries:
+The adversarial setup is motivated by a minimax game; training uses the non-saturating generator loss described below:
 
 1.  **The Generator ($G$) - "The Forger":**
     * **Input:** A vector of 100 random numbers (Latent Space $z$).
@@ -34,13 +34,13 @@ As training progresses, $D$ and $G$ may improve or destabilize one another. GAN 
 * **Optimization:**
     * **Loss:** Binary Cross Entropy (BCE).
     * **Optimizer:** Adam ($\alpha=0.0002$, $\beta_1=0.5$).
-    * **Weights:** Initialized from a Normal Distribution ($\mu=0, \sigma=0.02$).
+    * **Weights:** Convolution weights use $N(0, 0.02^2)$; BatchNorm scale weights use $N(1, 0.02^2)$.
 * **Hardware Efficiency:** Runtime depends on hardware and package versions; measure it locally rather than treating a fixed duration as a benchmark.
 
 ## Key Results
 
 ### 1. Training Dynamics (The Oscillating Loss)
-Unlike standard deep learning, GAN loss does not converge to zero. Instead, it oscillates as the two networks fight.
+GAN losses can oscillate during training. Their shape alone does not establish convergence or sample quality.
 * **D-Loss (Red):** The Detective learning to spot flaws.
 * **G-Loss (Blue):** The Forger trying to deceive the Detective.
 
@@ -51,3 +51,7 @@ Latent interpolation is a qualitative diagnostic. A smooth sequence is not, by i
 ## Author
 
 **Alejandro Treny Ortega**
+
+## Running
+
+Use the shared [Python environment](../RUNNING.md). Run all cells in `notebook.ipynb`; the first run downloads MNIST through torchvision. The checked run used all 60,000 training images, five epochs and batches of 64.

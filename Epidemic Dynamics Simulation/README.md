@@ -1,6 +1,6 @@
 # Epidemic Dynamics Simulation
 
-This project simulates the spread of a theoretical virus using Cellular Automata and Linear Algebra techniques. Instead of traditional agent-based modeling with loops, this simulation utilizes 2D Convolutions and vectorized operations to process population dynamics efficiently in pure Python.
+This project simulates the spread of a theoretical virus using Cellular Automata and Linear Algebra techniques. Instead of traditional agent-based modeling with loops, this simulation utilizes 2D Convolutions and vectorized operations to process population dynamics using NumPy and SciPy from Python.
 
 ## Project Overview
 

@@ -21,6 +21,6 @@ The tool operates on the binary level of **NumPy** arrays:
 
 * **Carrier Depth:** 8-bit per channel (Standard RGB).
 * **Injection Method:** 2-bit Replacement (Stealth Mode).
-    * The top 6 bits of the carrier are preserved (99% visual fidelity).
-    * The secret image is compressed to 2 bits and grafted onto the carrier's noise floor.
+    * The top 6 bits are preserved; each 8-bit channel changes by at most 3.
+    * Each secret colour channel is quantized to 2 bits and grafted onto the carrier's noise floor.
 * **Artifacts:** May be visible depending on the images and payload; can also be detected by statistical and learned steganalysis methods.

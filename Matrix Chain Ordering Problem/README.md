@@ -30,14 +30,14 @@ The report covers the four tasks from the assignment:
 
 ## Reproducible execution with Docker
 
-Docker is the recommended way to run the project if you want the same operating-system layer, R version, Quarto version, compiler toolchain, and OpenMP-capable C++ environment every time.
+Docker is the recommended way to run the project if you want the an R/Quarto environment with an OpenMP-capable C++ compiler.
 
 What the container pins:
 
 - `R 4.5.1`
 - Quarto CLI `1.6.42`
-- Linux GCC toolchain with OpenMP
-- The R packages required by the notebook
+
+The compiler, operating-system packages and R dependencies are installed from their repositories at image build time; their versions are not pinned.
 
 What Docker does **not** fully pin:
 
@@ -45,7 +45,7 @@ What Docker does **not** fully pin:
 - CPU-specific BLAS performance
 - Thread scheduling and available core count
 
-So Docker gives you a reproducible **software stack** and render process, but benchmark numbers can still vary somewhat with hardware.
+Docker provides a common build recipe, not a fully locked software stack. Dependency versions and benchmark numbers can change between builds.
 
 The repository already includes a committed [notebook.html](notebook.html) for convenient viewing on GitHub, while Docker lets you regenerate it from scratch.
 It is also the recommended path for the Task 4 parallel benchmarks, because the container explicitly enables OpenMP during compilation.
@@ -79,15 +79,15 @@ You only need to rebuild the image if you change:
 - the list of R dependencies
 - the Quarto version
 
-If you only change the notebook contents, rebuild is still the simplest option, but the environment itself has not changed.
+The image copies the notebook at build time, so rebuild it after changing the source, or bind-mount the project when running it.
 
 ### Optional: control OpenMP threads
 
-The container defaults to `OMP_NUM_THREADS=4`. You can override it at runtime:
+The container defaults to `OMP_NUM_THREADS=4`. You can request fewer threads at runtime; the notebook caps its parallel comparison at four:
 
 ```bash
 docker run --rm \
-  -e OMP_NUM_THREADS=8 \
+  -e OMP_NUM_THREADS=2 \
   -v "$(pwd)/output:/output" \
   matrix-chain-ordering
 ```

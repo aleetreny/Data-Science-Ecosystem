@@ -6,7 +6,7 @@ This project applies **Principal Component Analysis (PCA)** to astronomical data
 
 Starting with a dataset of over 8,000 observations and 153 variables, we performed a rigorous statistical analysis to:
 1.  **Select** relevant stellar and planetary features.
-2.  **Validate** the use of PCA via correlation analysis (checking for multicollinearity).
+2.  **Describe** correlation structure before PCA.
 3.  **Reduce** dimensionality while retaining the majority of the variance.
 4.  **Interpret** the new components in the context of astrophysics.
 
@@ -22,16 +22,11 @@ This repository contains three key files:
 
 ##  Key Findings
 
-Our analysis successfully reduced the dataset from **10 correlated variables** to **4 uncorrelated Principal Components (PCs)**, explaining **over 85% of the total variance**.
+The source contains **8,054 KOI records and 153 columns**. Ten selected numeric variables have **7,994 complete rows**. Eight are transformed with `log10(x+1)`; surface gravity and magnitude retain their existing logarithmic scales. Both the script and report standardize this same transformed matrix.
 
-Through biplots and factor loading analysis, we identified the physical meaning of these new dimensions:
+The first four components retain **86.651%** of standardized variance. PC1 emphasizes stellar radius, mass and surface gravity; PC2 combines period, duration and insolation; PC3 contrasts transit depth and inferred radius with other inputs; PC4 has a strong stellar-temperature loading. These are descriptions of coefficients, not isolated physical mechanisms. Component signs are arbitrary, and uncorrelated PCA scores do not imply statistical independence of the original phenomena.
 
-* **PC1 (Stellar Scale):** Represents the size and temperature of the host star (Correlation between Radius and Temperature).
-* **PC2 (Orbital Dynamics):** Represents the distance and period of the planet's orbit.
-* **PC3 (Planet Size):** Captures the transit depth and planetary radius.
-* **PC4 (Stellar Evolution):** A secondary axis capturing the evolutionary stage of the system.
-
-> **Conclusion:** The analysis proves that stellar properties (host star) and orbital mechanics (planet behavior) are statistically independent phenomena in this dataset.
+The correlation circle uses eigenvectors multiplied by component standard deviations. Comparisons against threshold-derived labels are descriptive because those labels reuse input variables. Sixteen Wilcoxon comparisons report Holm-adjusted p-values; they are not independent validation of astrophysical classes.
 
 ##  Technologies & Libraries
 
@@ -43,18 +38,14 @@ The analysis was conducted in **R** using **Quarto** for reporting. Key librarie
 
 ##  How to Run
 
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/your-username/kepler-pca-analysis.git](https://github.com/your-username/kepler-pca-analysis.git)
-    ```
-2.  **Open the project in RStudio.**
-3.  **Install required packages:**
-    ```r
-    install.packages(c("tidyverse", "ggplot2", "plotly", "ggcorrplot", "GGally", "quarto"))
-    ```
-4.  **Render the Report:**
-    Open `Report.qmd` and click the **Render** button to generate the HTML or PDF analysis.
-    *Alternatively, run `Code.R` to execute the analysis line-by-line.*
+Use the [shared R/Quarto environment](../RUNNING.md). From this project directory:
+
+```bash
+Rscript Code.R
+quarto render Report.qmd --to html
+```
+
+The HTML report contains interactive plots. A PDF render uses static fallbacks. Source column meanings follow the [NASA Exoplanet Archive KOI documentation](https://exoplanetarchive.ipac.caltech.edu/docs/API_kepcandidate_columns.html): transit depth is in ppm, `kepid` identifies the target star, and `koi_fpflag_ss` is the stellar-eclipse flag.
 
 ##  Authors
 

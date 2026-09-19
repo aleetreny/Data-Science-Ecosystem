@@ -11,16 +11,8 @@ format:
     code-fold: show
     theme: cosmo
     embed-resources: false
-metadata:
-  og:
-    title: "Probabilistic Cancer Classification via RNA-Seq Data"
-    description: "Multiclass classification of tumor types with probabilistic models."
-    image: "preview.png"
-  twitter:
-    card: summary_large_image
-    image: "preview.png"
 execute:
-  warning: false
+  warning: true
   message: false
 editor: visual
 ---
@@ -54,23 +46,23 @@ To achieve a robust classification, we will adhere to the **Probabilistic Learni
 
 1.  **Linear Discriminant Analysis (LDA):** A generative method assuming Gaussian distributions with a common covariance matrix.
 2.  **Quadratic Discriminant Analysis (QDA):** A more flexible extension of LDA allowing for class-specific covariance matrices.
-3.  **Naive Bayes:** A probabilistic classifier assuming independence between features (genes).
+3.  **Naive Bayes:** A probabilistic classifier assuming conditional independence of the retained PC features given the class.
 4.  **Multinomial Logistic Regression:** An extension of the standard binary logistic regression for multiple classes (used as a baseline).
 
 ### Statistical Challenge: High Dimensionality ($p \gg n$)
 
-Our dataset contains **20,531 genes** ($p$) but only **801 samples** ($n$). This presents a critical problem for models like LDA and QDA, which require computing covariance matrices. Since $p > n$, these matrices are not invertible (singular), and the models will mathematically fail.
+Our dataset contains **20,531 genes** ($p$) and **801 samples** ($n$). With $p > n$, the unregularized covariance estimates used by classical LDA and QDA are singular. Reducing dimension or regularizing these estimates is necessary; this does not make all high-dimensional classifiers impossible.
 
-To solve this, we **must** perform **Dimensionality Reduction** before modeling. We will use **Principal Component Analysis (PCA)** to project the gene space into a smaller set of uncorrelated components that capture the majority of the variance. As part of this process, genes with zero variance (constant across all samples) are removed, since they carry no discriminative information and cause numerical issues during scaling.
+This analysis uses **PCA** to reduce dimension. Genes that are constant in the relevant training partition are removed before scaling. Nonzero-variance genes are centered and standardized; the test partition and each validation fold use transformations fitted on their corresponding training observations.
 
 ### Evaluation Framework
 
 Following the best practices for **Model Evaluation**, we will rigorously validate our results using:
 
 -   **Stratified Train/Test Split (80/20):** PCA is fitted exclusively on the training set, and the test set is projected independently to prevent data leakage.
--   **10-Fold Cross-Validation:** Applied within the training set to tune the number of principal components and confirm the stability of our error estimates.
+-   **10-Fold Cross-Validation:** Applied within the training set to tune the number of principal components and estimate validation performance.
 -   **Confusion Matrices:** To verify performance across all 5 cancer types on the held-out test set.
--   **Result Validation:** Permutation tests and integrity checks to confirm the results are not artifacts.
+-   **Result Checks:** A shuffled-label diagnostic and train/test integrity assertions.
 -   **Metrics:** We will use **Accuracy** and **Kappa** (to account for random chance agreement) as our primary metrics.
 
 ------------------------------------------------------------------------
@@ -83,18 +75,22 @@ Following the best practices for **Model Evaluation**, we will rigorously valida
 
 library(tidyverse)
 library(DT)
+library(caret)
 ```
 
 ## Data Loading
 
 ```{r}
 #| label: load-data
-#| cache: true
 
 # Load the local CSV files
 # Use read_csv for faster loading of large datasets
-data_raw <- read_csv("data.csv", show_col_types = FALSE)
-labels_raw <- read_csv("labels.csv", show_col_types = FALSE)
+data_dir <- Sys.getenv("RNA_SEQ_DATA_DIR", unset = ".")
+data_raw <- read_csv(file.path(data_dir, "data.csv"), show_col_types = FALSE)
+labels_raw <- read_csv(file.path(data_dir, "labels.csv"), show_col_types = FALSE)
+stopifnot(!anyDuplicated(data_raw[[1]]), !anyDuplicated(labels_raw[[1]]),
+          !anyNA(data_raw[[1]]), !anyNA(labels_raw[[1]]),
+          setequal(data_raw[[1]], labels_raw[[1]]))
 
 # Display dimensions as a proper table
 tibble(
@@ -109,7 +105,7 @@ tibble(
   )
 ```
 
-The gene expression matrix contains **801 samples and 20,532 columns** (20,531 genes plus the sample identifier). The labels file maps each of the 801 samples to one of the five cancer types. Both files share the same number of rows, confirming a one-to-one correspondence between expression profiles and class labels.
+The expression matrix contains `r nrow(data_raw)` samples and `r ncol(data_raw)` columns, including the sample identifier. The loader checks unique, nonmissing IDs and equality of the two ID sets before a one-to-one join; matching row counts alone would not establish correspondence.
 
 ## Preprocessing
 
@@ -118,9 +114,16 @@ The gene expression matrix contains **801 samples and 20,532 columns** (20,531 g
 
 # Merge the labels (Class) with the gene expression data
 # Both files likely have the sample ID as the first column, often named '...1' by default
-full_data <- inner_join(labels_raw, data_raw, by = c("...1" = "...1")) %>%
+full_data <- inner_join(labels_raw, data_raw, by = c("...1" = "...1"), relationship = "one-to-one") %>%
     rename(sample_id = ...1) %>%
     mutate(Class = as.factor(Class))
+stopifnot(!anyNA(full_data$Class), all(is.finite(as.matrix(select(full_data, starts_with("gene_"))))))
+
+# Fix the split before looking at expression distributions or class associations.
+set.seed(42)
+train_idx <- createDataPartition(full_data$Class, p = 0.8, list = FALSE)
+train_data <- full_data[train_idx, ]
+test_data <- full_data[-train_idx, ]
 
 # Quick check of the resulting dataset structure
 # Display the first 10 columns of the first 20 rows using an interactive table
@@ -132,7 +135,7 @@ datatable(
 
 ```
 
-We merge both files on the shared sample identifier and convert the `Class` column to a factor for downstream modeling. The resulting dataset has **801 rows and 20,533 columns** (sample ID + cancer type + 20,531 gene expression values). The preview above shows the first few genes; each cell represents a normalized expression level for a given gene in a given patient.
+We join expression profiles and labels by sample ID and fix the stratified split immediately. The preview and class counts describe the cohort; all subsequent feature distributions, correlations and ANOVA summaries use training rows only.
 
 ## Class Distribution
 
@@ -163,14 +166,14 @@ This imbalance is worth noting because:
 
 -   Models like **LDA** and **Logistic Regression** may be biased toward predicting BRCA more frequently.
 -   Evaluation metrics like raw **Accuracy** can be misleading, a model could achieve decent accuracy by simply favoring the majority class. This motivates our use of **Kappa** and per-class metrics from the **Confusion Matrix**.
--   However, the imbalance is not extreme, so resampling techniques (e.g., SMOTE) are not strictly necessary.
+-   This study retains the observed class proportions; it does not evaluate resampling techniques such as SMOTE.
 
 ## Missing Values Check
 
 ```{r}
 #| label: eda-missing-values
 
-gene_cols <- full_data |> select(starts_with("gene_"))
+gene_cols <- train_data |> select(starts_with("gene_"))
 
 tibble(
   `Total Cells` = scales::comma(prod(dim(gene_cols))),
@@ -180,11 +183,11 @@ tibble(
   datatable(
     options = list(dom = "t", ordering = FALSE),
     rownames = FALSE,
-    caption = "Missing values summary across all gene expression columns"
+    caption = "Missing values in training gene expression columns"
   )
 ```
 
-The dataset is **completely clean**, with zero missing values across all 16.4 million cells (801 samples x 20,531 genes). No imputation or filtering is needed, which is expected for a curated repository like TCGA/UCI.
+The table reports missing values in the training expression matrix. The loader also rejects nonfinite gene values in the full input; missing-value checks alone do not establish broader data quality or biological validity.
 
 ## Global Gene Expression Distribution
 
@@ -194,7 +197,7 @@ The dataset is **completely clean**, with zero missing values across all 16.4 mi
 set.seed(42)
 sample_genes <- sample(names(gene_cols), 500)
 
-full_data |>
+train_data |>
   select(Class, all_of(sample_genes)) |>
   pivot_longer(-Class, names_to = "gene", values_to = "expression") |>
   ggplot(aes(x = expression)) +
@@ -208,17 +211,17 @@ full_data |>
 
 The distribution reveals a clear **bimodal pattern**:
 
--   A large spike at **zero or near-zero** expression, corresponding to genes that are effectively **silenced** or not expressed in many samples. This is biologically expected, as most genes are not active in any given tissue type.
+-   A large spike at **zero or near-zero** expression in this transformed measurement matrix. This plot alone cannot distinguish biological silencing from measurement or preprocessing effects.
 -   A second, broader peak centered around **expression level 8 to 10**, representing the actively expressed genes, roughly following a Gaussian shape (consistent with log-transformed RNA-Seq counts).
 
-This bimodality is important for modeling: many genes carry no discriminative signal (the zero-inflated group), which adds noise. This further motivates **dimensionality reduction via PCA** and potentially filtering out near-zero variance genes before fitting our classifiers.
+A low expression value does not imply that a gene is uninformative. The analysis removes only genes with zero training variance; it does not select features from these exploratory plots.
 
 ## Mean Expression by Cancer Type
 
 ```{r}
 #| label: eda-expression-by-class
 
-full_data |>
+train_data |>
   mutate(mean_expr = rowMeans(pick(starts_with("gene_")), na.rm = TRUE)) |>
   ggplot(aes(x = Class, y = mean_expr, fill = Class)) +
   geom_boxplot(alpha = 0.7) +
@@ -230,7 +233,7 @@ full_data |>
   theme(legend.position = "none")
 ```
 
-When we aggregate the expression of all 20,531 genes into a single mean per sample, the five cancer types show **similar overall expression levels**, centered around 6.3 to 6.6. COAD tends slightly lower and more dispersed, while LUAD sits slightly higher on average. Importantly, all five classes overlap substantially, which tells us that the discriminative signal does not lie in the global expression magnitude but rather in the **specific patterns across individual genes**. This confirms the need for methods that leverage per-gene differences (such as PCA projections) rather than simple aggregate summaries.
+The boxplots compare average expression per training sample. Overlap of these summaries does not rule out discrimination by individual genes, and the figure does not establish a biological mechanism.
 
 ## Gene Variance Distribution
 
@@ -248,12 +251,12 @@ ggplot(gene_variances, aes(x = variance + 1e-6)) +
   labs(
     title = "Distribution of Gene Variances (log scale)",
     x = "Variance (log10)", y = "Count",
-    subtitle = "Genes with near-zero variance contribute little to classification"
+    subtitle = "Raw variance alone does not measure predictive value"
   ) +
   theme_minimal()
 ```
 
-The variance distribution is **right-skewed on the log scale**, with most genes having moderate variance (0.1 to 10). However, there are **267 genes with exactly zero variance** (constant across all samples) and a total of **1,318 genes with variance below 1**. These low-variance genes are effectively uninformative for classification and will naturally receive negligible weight in PCA. At the other end, a small set of highly variable genes (variance \> 10) are likely the strongest candidates for distinguishing between cancer types.
+There are **`r sum(gene_variances$variance == 0)` genes with zero training variance** and **`r sum(gene_variances$variance < 1)` below 1**. Raw variance does not measure predictive value: every retained gene is standardized to unit training variance before PCA, so low raw variance does not imply a negligible loading.
 
 ## Correlation Among Top Variable Genes
 
@@ -264,7 +267,7 @@ library(pheatmap)
 
 top_genes <- gene_variances |> slice_head(n = 30) |> pull(gene)
 
-cor_matrix <- full_data |>
+cor_matrix <- train_data |>
   select(all_of(top_genes)) |>
   cor(use = "pairwise.complete.obs")
 
@@ -276,7 +279,7 @@ pheatmap(
 )
 ```
 
-The heatmap reveals **clear clusters of correlated genes** among the 30 most variable ones. Several groups show strong positive correlations (red blocks along the diagonal), indicating genes that tend to be co-expressed, likely because they belong to the same biological pathways or are characteristic of a specific cancer type. There are also notable **negative correlations** (blue regions), suggesting genes whose expression patterns are inversely related across classes. This multicollinearity among the top genes is another strong justification for using **PCA**, which will transform these correlated variables into orthogonal (uncorrelated) components.
+The heatmap summarizes pairwise correlations among the 30 genes with largest training variance. Correlation alone does not identify shared pathways or biological causes. PCA gives uncorrelated coordinates on the fitted training sample, not necessarily within each cancer class.
 
 ## Top Differentially Expressed Genes
 
@@ -286,7 +289,7 @@ The heatmap reveals **clear clusters of correlated genes** among the 30 most var
 # One-way ANOVA F-statistic per gene to identify class-discriminative genes
 f_stats <- map_dbl(names(gene_cols), \(g) {
   tryCatch({
-    summary(aov(gene_cols[[g]] ~ full_data$Class))[[1]][1, "F value"]
+    summary(aov(gene_cols[[g]] ~ train_data$Class))[[1]][1, "F value"]
   }, error = \(e) NA_real_)
 })
 
@@ -294,7 +297,7 @@ top_diff_genes <- tibble(gene = names(gene_cols), F_stat = f_stats) |>
   arrange(desc(F_stat)) |>
   slice_head(n = 12)
 
-full_data |>
+train_data |>
   select(Class, all_of(top_diff_genes$gene)) |>
   pivot_longer(-Class, names_to = "gene", values_to = "expression") |>
   ggplot(aes(x = Class, y = expression, fill = Class)) +
@@ -305,24 +308,20 @@ full_data |>
   theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-Using a one-way ANOVA across the five cancer classes, we identify the genes with the highest F-statistics, meaning the strongest between-class differences relative to within-class variability. The faceted boxplots confirm that these top genes exhibit highly **tissue-specific expression patterns**: each gene is typically overexpressed in one particular cancer type while remaining near zero in the others. For instance, some genes are almost exclusively active in KIRC, while others are specific to PRAD or BRCA. This is consistent with the biological expectation that different tumors originate from different tissues and retain distinct transcriptomic signatures. These genes will naturally receive heavy loadings in the first principal components.
+The plot ranks training genes by their one-way ANOVA F-statistic. This is an exploratory comparison, without multiplicity-adjusted inference or gene annotation. A large F-statistic does not guarantee a large PCA loading, because PCA does not use the labels. These rankings are not used to select classifier inputs.
 
 ------------------------------------------------------------------------
 
 # Train/Test Split
 
-Before any dimensionality reduction or modeling, we split the dataset into **training (80%)** and **test (20%)** sets using stratified sampling to preserve class proportions. This ensures that PCA is fitted exclusively on training data, preventing information leakage from the test set.
+The stratified 80/20 split was fixed before feature EDA. Its counts are shown below; preprocessing for cross-validation is fitted separately within each analysis fold.
 
 ```{r}
 #| label: train-test-split
 
 library(caret)
 
-set.seed(42)
-train_idx <- createDataPartition(full_data$Class, p = 0.8, list = FALSE)
-
-train_data <- full_data[train_idx, ]
-test_data  <- full_data[-train_idx, ]
+# The fixed split was created before feature EDA; display its counts here.
 
 tibble(
   Set = c("Training", "Test"),
@@ -347,7 +346,7 @@ The stratified split preserves the relative proportions of each cancer type in b
 
 # Principal Component Analysis (PCA)
 
-As established in the introduction, the raw gene space ($p = 20{,}531$) far exceeds the number of samples ($n = 801$), making direct application of LDA, QDA, or logistic regression impossible. PCA allows us to project the data into a lower-dimensional space of uncorrelated components while retaining the majority of variance.
+The raw gene space has more dimensions than observations. PCA provides the dimension reduction used here for the classical discriminant models; regularized high-dimensional alternatives, including logistic regression, remain possible.
 
 Crucially, PCA is fitted **only on the training set** to avoid data leakage. The test set is then projected onto the same principal components.
 
@@ -395,7 +394,7 @@ tibble(PC = factor(1:30, levels = 1:30), pct = pct_var) |>
   theme_minimal()
 ```
 
-The first principal component captures **10.5%** of the total variance, followed by PC2 at **8.8%** and PC3 at **7.9%**. The curve shows a clear "elbow" around PC4 to PC6, after which individual components contribute less than 3% each. While no single component dominates, the first few PCs together capture a substantial fraction of the information.
+The first three training components explain **`r sprintf("%.1f", pct_var[1])`%**, **`r sprintf("%.1f", pct_var[2])`%** and **`r sprintf("%.1f", pct_var[3])`%** of standardized training variance. Explained variance measures reconstruction, not classification accuracy.
 
 ## Cumulative Variance Explained
 
@@ -403,6 +402,7 @@ The first principal component captures **10.5%** of the total variance, followed
 #| label: pca-cumulative-variance
 
 cumvar <- cumsum(pca_result$sdev^2 / sum(pca_result$sdev^2))
+pc_cutoffs <- vapply(c(0.80, 0.90, 0.95), function(target) which(cumvar >= target)[1], integer(1))
 
 tibble(PC = seq_along(cumvar), cumulative_variance = cumvar) |>
   filter(PC <= 500) |>
@@ -411,7 +411,7 @@ tibble(PC = seq_along(cumvar), cumulative_variance = cumvar) |>
   geom_hline(yintercept = c(0.80, 0.90, 0.95), linetype = "dashed", color = "grey50") +
   annotate("text", x = 490, y = c(0.81, 0.91, 0.96),
            label = c("80%", "90%", "95%"), size = 3.5, hjust = 1) +
-  geom_vline(xintercept = c(159, 311, 435), linetype = "dotted", color = "red", alpha = 0.5) +
+  geom_vline(xintercept = pc_cutoffs, linetype = "dotted", color = "red", alpha = 0.5) +
   labs(
     title = "Cumulative Variance Explained by Principal Components",
     x = "Number of Components", y = "Cumulative Proportion"
@@ -419,7 +419,7 @@ tibble(PC = seq_along(cumvar), cumulative_variance = cumvar) |>
   theme_minimal()
 ```
 
-The cumulative variance curve shows that **159 components** are needed to capture 80% of the variance, **311 for 90%**, and **435 for 95%**. This confirms the high intrinsic dimensionality of gene expression data. For classification, we will experiment with different numbers of components to find the best trade-off between information retention and model complexity.
+The training PCA needs **`r pc_cutoffs[1]`**, **`r pc_cutoffs[2]`** and **`r pc_cutoffs[3]`** components to reach 80%, 90% and 95% of variance, respectively. The classification grid below is fixed explicitly and selected using training cross-validation.
 
 ## PCA Scatter Plots
 
@@ -433,12 +433,12 @@ ggplot(pca_scores, aes(x = PC1, y = PC2, color = Class)) +
   geom_point(alpha = 0.7, size = 2) +
   labs(
     title = "PCA: PC1 vs PC2 by Cancer Type (Training Set)",
-    subtitle = "First two components capture the strongest class separation"
+    subtitle = "Axes maximize training variance without using class labels"
   ) +
   theme_minimal()
 ```
 
-The PC1 vs PC2 projection (computed on training data only) reveals **clear spatial separation** between the cancer types. KIRC forms a tight, well-separated cluster on the right side of PC1. PRAD also shows good separation in the upper-left region. BRCA, COAD, and LUAD overlap more in the center, although they still form distinguishable clouds. This is very encouraging for classification: even with just two dimensions, the classes are largely separable.
+This projection displays the first two training PCs, with class labels added only for interpretation. The plot is descriptive; the cross-validation and held-out metrics quantify classification performance.
 
 ```{r}
 #| label: pca-scatter-34
@@ -447,12 +447,12 @@ ggplot(pca_scores, aes(x = PC3, y = PC4, color = Class)) +
   geom_point(alpha = 0.7, size = 2) +
   labs(
     title = "PCA: PC3 vs PC4 by Cancer Type (Training Set)",
-    subtitle = "Additional components capture finer class distinctions"
+    subtitle = "Additional orthogonal directions of training variance"
   ) +
   theme_minimal()
 ```
 
-The PC3 vs PC4 plane reveals **additional class structure** not visible in the first two components. PRAD separates clearly in the lower-right quadrant, while LUAD forms a distinct cluster on the left. BRCA, which overlapped heavily with other classes in PC1 vs PC2, now spreads into its own region. This confirms that multiple PCA dimensions contribute complementary discriminative information, reinforcing the need to use a sufficient number of components in the classifiers.
+The next two PCs display additional variation. Class overlap or separation in this plane does not determine which dimension is best for classification.
 
 ------------------------------------------------------------------------
 
@@ -463,7 +463,7 @@ We now train the four probabilistic classifiers outlined in the introduction:
 PCA, centring and scaling are fitted independently inside every resampling fold;
 otherwise validation folds would influence their own feature representation.
 
-To understand how the number of principal components affects performance, we sweep over several values: 5, 10, 20, 50, 100, and 159 (the number needed to capture 80% of the training variance).
+We evaluate the fixed PC grid 5, 10, 20, 50, 100 and 159. The largest value is a candidate dimension, rather than a guaranteed variance threshold in every fold.
 
 Note that **QDA** requires each class-specific covariance matrix to be invertible, so the number of PCs must be smaller than the size of the smallest class in the training set. We therefore limit QDA to a maximum of 50 PCs.
 
@@ -521,7 +521,8 @@ predict_fold <- function(model_name, fold, k) {
     set.seed(42)
     train_md <- as.data.frame(train_x)
     train_md$Class <- fold$train_y
-    fit <- multinom(Class ~ ., data = train_md, trace = FALSE, MaxNWts = 5000)
+    fit <- multinom(Class ~ ., data = train_md, trace = FALSE, MaxNWts = 5000, maxit = 1000)
+    stopifnot(fit$convergence == 0)
     predict(fit, newdata = as.data.frame(valid_x))
   } else {
     stop("Unsupported model: ", model_name)
@@ -561,7 +562,7 @@ for (k in pc_counts) {
 results_all <- bind_rows(results_list)
 ```
 
-The training loop fits a total of **22 models** (4 classifiers x 6 PC counts, minus QDA for 100 and 159 PCs). Each model is evaluated via 10-fold cross-validation **within the training set**, producing both **Accuracy** and **Kappa** as performance metrics. Kappa is particularly useful here because it adjusts for the class imbalance we observed earlier, giving a more honest picture of whether the model is genuinely learning the class boundaries or simply exploiting the prior probabilities.
+The training loop compares **22 configurations** with ten fits each (4 classifiers x 6 PC counts, minus QDA for 100 and 159 PCs). Each model is evaluated via 10-fold cross-validation **within the training set**, producing both **Accuracy** and **Kappa** as performance metrics. Kappa is particularly useful here because it adjusts for the class imbalance we observed earlier, providing an additional summary of agreement beyond the class-marginal expectation.
 
 ## Accuracy vs Number of Components
 
@@ -573,7 +574,7 @@ results_all |>
   geom_line(linewidth = 0.8) +
   geom_point(size = 3) +
   scale_x_continuous(breaks = pc_counts) +
-  scale_y_continuous(labels = scales::percent_format(), limits = c(0.75, 1.0)) +
+  scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1.0)) +
   labs(
     title = "Classification Accuracy vs Number of Principal Components",
     x = "Number of PCs", y = "Accuracy (10-fold CV, Training Set)"
@@ -650,7 +651,8 @@ for (i in seq_len(nrow(best_per_model))) {
     fit <- naive_bayes(Class ~ ., data = train_md)
     test_preds <- predict(fit, newdata = test_md)
   } else if (model_name == "Multinomial LogReg") {
-    fit <- multinom(Class ~ ., data = train_md, trace = FALSE)
+    fit <- multinom(Class ~ ., data = train_md, trace = FALSE, MaxNWts = 5000, maxit = 1000)
+    stopifnot(fit$convergence == 0)
     test_preds <- predict(fit, newdata = test_md)
   }
   
@@ -758,7 +760,7 @@ info$cm$table |>
 
 Multinomial logistic regression directly estimates decision boundaries in the selected PCA space. The matrix above gives its current held-out result; it should be compared with the other methods using the same fixed test split, while recognising that a single split does not quantify deployment performance.
 
-## Overall Best Model Selection
+## Held-Out Comparison
 
 ```{r}
 #| label: best-model
@@ -792,9 +794,9 @@ The table above reports one held-out evaluation for each model after selecting i
 
 Very high accuracy can be a symptom of data leakage or other methodological errors. The following checks assess selected leakage risks, but they do not replace repeated evaluation on an external cohort.
 
-## Permutation Test
+## Shuffled-Label Diagnostic
 
-If the model is exploiting a real biological signal, shuffling the class labels should destroy that signal and drop accuracy to chance level (\~20% for 5 balanced classes).
+Shuffling labels removes their original pairing with expression profiles. The diagnostic uses the same 50-PC LDA configuration in both conditions. Uniform prediction has expected accuracy 20%; because the classes are imbalanced, that is not the expected accuracy of every shuffled-label fit. The training-majority baseline is shown too.
 
 ```{r}
 #| label: validation-permutation
@@ -810,19 +812,26 @@ test_md_shuf <- as_tibble(pca_test_scores[, 1:50])
 fit_shuf <- lda(Class ~ ., data = train_md_shuf)
 preds_shuf <- predict(fit_shuf, newdata = test_md_shuf)$class
 acc_shuf <- mean(preds_shuf == test_data$Class)
+train_md_real <- train_md_shuf
+train_md_real$Class <- train_data$Class
+fit_real_50 <- lda(Class ~ ., data = train_md_real)
+acc_real_50 <- mean(predict(fit_real_50, newdata = test_md_shuf)$class == test_data$Class)
+majority_class <- names(which.max(table(train_data$Class)))
+majority_accuracy <- mean(test_data$Class == majority_class)
 
 tibble(
-  Condition = c("Real labels (LDA, 50 PCs)", "Shuffled labels (LDA, 50 PCs)", "Random chance (5 classes)"),
+  Condition = c("Real labels (LDA, 50 PCs)", "Shuffled labels (LDA, 50 PCs)", "Uniform random prediction (5 classes)", "Training-majority prediction"),
   Accuracy = scales::percent(c(
-    per_model_cms[["LDA"]]$cm$overall["Accuracy"],
+    acc_real_50,
     acc_shuf,
-    1/5
+    1/5,
+    majority_accuracy
   ), accuracy = 0.1)
 ) |>
   datatable(
     options = list(dom = "t", ordering = FALSE),
     rownames = FALSE,
-    caption = "Permutation test: accuracy with real vs. shuffled labels"
+    caption = "Single shuffled-label diagnostic with matched LDA dimension"
   )
 ```
 
@@ -830,7 +839,7 @@ The table contrasts the real-label result with a single shuffled-label sanity ch
 
 ## Degradation with Fewer Components
 
-A legitimate model should degrade gracefully when given less information. Using only 2 PCs should produce a clearly imperfect classifier.
+The two-PC fit checks sensitivity to representation dimension. Reducing dimension can help or harm accuracy; no particular outcome proves that a model is legitimate.
 
 ```{r}
 #| label: validation-2pc
@@ -882,6 +891,7 @@ for (i in seq_len(nrow(test_mat))) {
   dists <- colSums((t(train_mat) - test_mat[i, ])^2)
   if (min(dists) == 0) n_duplicates <- n_duplicates + 1
 }
+stopifnot(id_overlap == 0, n_duplicates == 0)
 
 tibble(
   Check = c(
@@ -904,7 +914,7 @@ tibble(
   )
 ```
 
-The training and test sets are **completely disjoint**: zero sample ID overlap and zero exact duplicate rows. Combined with the fact that PCA was fitted exclusively on training data, this confirms there is no information leakage between the two sets.
+Assertions check zero ID overlap and zero exact expression-row overlap between training and test. These checks address specific leakage routes; they cannot establish the absence of every source of bias or leakage.
 
 ## Why Are These Results So High?
 
@@ -918,9 +928,9 @@ This study evaluates probabilistic classifiers combined with PCA for five cancer
 
 ## Key Findings
 
-1.  **A rigorous train/test split is essential.** Computing PCA on the full dataset before cross-validation introduces data leakage, which can inflate accuracy estimates. By fitting PCA only on the training set (642 samples) and projecting the test set (159 samples) independently, we obtain honest generalization estimates.
+1.  **Separate fitting from evaluation.** The split has `r nrow(train_data)` training and `r nrow(test_data)` test samples. Each CV fold fits its own scaling and PCA; final fits use only the training partition.
 
-2.  **PCA is essential, not optional.** With $p = 20{,}531$ genes and only $n = 801$ samples, direct application of LDA, QDA, or logistic regression is mathematically impossible. PCA reduces the feature space while preserving the discriminative structure, as confirmed by the clear class separation visible in the first few principal components.
+2.  **PCA is the dimension-reduction method used here.** It makes the selected classical models estimable; regularization and other representations are alternatives. Retained variance does not guarantee retained predictive signal.
 
 3.  **Model ranking should follow the rendered training-CV and held-out tables.** PCA coordinates are orthogonal, but that property does not guarantee the covariance assumptions of LDA or QDA.
 
@@ -928,7 +938,7 @@ This study evaluates probabilistic classifiers combined with PCA for five cancer
 
 5.  **Naive Bayes is evaluated across the same PC grid.** Its independence assumption is not guaranteed by PCA, so any trend with component count should be read from the current cross-validation curve rather than a fixed narrative value.
 
-6.  **The EDA was instrumental** in guiding modeling decisions. The bimodal expression distribution and the large number of zero-variance genes motivated the filtering step before PCA. The ANOVA analysis confirmed that individual genes carry strong tissue-specific signals, and the correlation heatmap justified the use of PCA to handle multicollinearity.
+6.  **Training-only EDA describes the input.** Correlations and ANOVA rankings are exploratory; they neither identify mechanisms nor select the classifier features.
 
 7.  **The integrity checks are safeguards, not proof of generalisation.** The fold isolation, train/test disjointness and sanity checks reduce common leakage risks; an external cohort would still be required before making clinical-performance claims.
 
@@ -944,13 +954,13 @@ This study evaluates probabilistic classifiers combined with PCA for five cancer
 
 ## Motivation
 
-Throughout this study, we have relied on **PCA** for dimensionality reduction. PCA is a linear method: it finds the directions of maximum variance and projects the data onto them. This is ideal for modeling (uncorrelated features, interpretable loadings), but linear projections can fail to capture complex, nonlinear relationships between samples when visualizing them in just two dimensions.
+Throughout this study, we have relied on **PCA** for dimensionality reduction. PCA is a linear method: it finds the directions of maximum variance and projects the data onto them. These features and loadings are useful for this analysis, but linear projections can fail to capture complex, nonlinear relationships between samples when visualizing them in just two dimensions.
 
-**UMAP** (Uniform Manifold Approximation and Projection) is a nonlinear dimensionality reduction technique that constructs a topological representation of the high-dimensional data and optimizes a low-dimensional layout that preserves both local neighborhood structure and, to some extent, global distances between clusters. Compared to the older t-SNE algorithm, UMAP is faster, better preserves global structure, and produces embeddings where inter-cluster distances are more meaningful.
+**UMAP** constructs a nonlinear low-dimensional representation from a neighborhood graph. Its axes, apparent cluster sizes and global distances depend on the data and hyperparameters; they should not be interpreted as direct biological distances.
 
-**Important caveat:** UMAP is used here **exclusively for visualization**. All classification models in this study use PCA scores as features. UMAP embeddings are not suitable as model inputs because the transformation is nonparametric, non-invertible, and sensitive to hyperparameters.
+**UMAP is used only for visualization in this study.** It can be used as an input transformation in other properly validated pipelines, but no such classifier is evaluated here.
 
-We fit UMAP on the **first 50 PCA scores of the training set** (a common practice to denoise the input before nonlinear projection) and then project the test set onto the same embedding.
+We fit UMAP on the **first 50 PCA scores of the training set** (a fixed dimension-reduction choice) and then project the test set onto the same embedding.
 
 ```{r}
 #| label: umap-compute
@@ -965,11 +975,12 @@ umap_train <- umap(
   n_neighbors = 15,
   min_dist = 0.3,
   metric = "euclidean",
-  ret_model = TRUE
+  ret_model = TRUE, n_threads = 1, n_sgd_threads = 1
 )
 
 # Project test set onto the same UMAP embedding
-umap_test <- umap_transform(pca_test_scores[, 1:50], umap_train)
+set.seed(42)
+umap_test <- umap_transform(pca_test_scores[, 1:50], umap_train, n_threads = 1, n_sgd_threads = 1)
 
 # Combine into tidy data frames
 umap_train_df <- tibble(
@@ -1024,7 +1035,7 @@ ggplot() +
   ) +
   labs(
     title = "UMAP: Test Samples Projected onto Training Embedding",
-    subtitle = "Triangles = test set (159 samples), circles = training set (faded)",
+    subtitle = paste0("Triangles = test set (", nrow(test_data), " samples), circles = training set (faded)"),
     x = "UMAP 1", y = "UMAP 2"
   ) +
   theme_minimal()
@@ -1059,13 +1070,7 @@ umap_train_df |>
   theme(legend.position = "none")
 ```
 
-The faceted view isolates each cancer type against the grey backdrop of all other samples. Several observations stand out:
-
--   **KIRC** forms the tightest cluster (sd \~0.75 on both axes), positioned far to the left and completely isolated from all other classes. Its minimum distance to the nearest class is \~9 units.
--   **COAD** is similarly compact (sd \~0.93/0.40) and isolated in the upper-right region, though its edge comes close to LUAD (min dist \~0.3).
--   **PRAD** clusters tightly in the lower-right, well separated from its nearest neighbor.
--   **BRCA**, the largest class, occupies the broadest area (sd \~1.86/1.30) in the center of the embedding. Its spread reflects both the larger sample count and potential molecular heterogeneity within breast tumors.
--   **LUAD** sits between BRCA and COAD, forming a compact group (sd \~0.69/1.12) that nearly touches BRCA at its closest edge.
+The faceted view highlights each class against the full training embedding. Compare the displayed locations within this run; coordinate orientation, apparent spread and inter-class gaps are properties of this fitted visualization, not validated biological distances or estimates of molecular heterogeneity.
 
 ## UMAP with Density Contours
 
@@ -1114,7 +1119,14 @@ p_pca + p_umap +
 
 The side-by-side comparison highlights the **complementary strengths** of each method:
 
--   **PCA** (left) preserves global variance directions. KIRC separates clearly along PC1, and PRAD along PC2, but BRCA, COAD, and LUAD form an overlapping cloud in the center. This is a consequence of PCA being a linear projection: it cannot "unfold" nonlinear structure in just two dimensions (though it works well for classification when using 10-50 PCs).
--   **UMAP** (right) sacrifices the linear interpretability of PCA axes but recovers the **local neighborhood structure** of the data, pulling all five classes into distinct clusters. COAD and LUAD, which are heavily mixed in PCA's 2D view, become clearly resolved. The only remaining proximity is between BRCA and LUAD edges, consistent with the 3 misclassified test samples we observed.
+-   **PCA** displays directions of maximum standardized training variance. A two-dimensional projection may hide structure present in later components.
+-   **UMAP** emphasizes local neighborhoods. Apparent separation in this visualization is not a classifier test or proof of independent biological clusters.
 
-Both methods agree on the same fundamental conclusion: the five cancer types occupy distinct regions of gene expression space. PCA captures this through orthogonal variance directions (which are ideal for classification), while UMAP reveals it through topology-preserving nonlinear embedding (which is ideal for visualization).
+These visualizations complement the quantitative results. They do not independently establish generalization, tissue mechanisms, or an absence of leakage.
+
+```{r}
+#| label: export-results
+#| include: false
+audit_output <- Sys.getenv("RNA_SEQ_AUDIT_OUTPUT", unset = "")
+if (nzchar(audit_output)) saveRDS(list(cv = results_all, test = test_summary, cutoffs = pc_cutoffs, split = c(train = nrow(train_data), test = nrow(test_data)), diagnostic = c(real = acc_real_50, shuffled = acc_shuf, majority = majority_accuracy), integrity = c(overlap = id_overlap, duplicates = n_duplicates)), audit_output)
+```

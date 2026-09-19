@@ -6,7 +6,7 @@
 
 This project explores **Neuroevolution** (Genetic Algorithms) as an alternative to standard Reinforcement Learning (DQN, PPO) for solving continuous state-space control problems.
 
-Using the `LunarLander-v3` environment, the notebook explores how a simple Multi-Layer Perceptron (MLP) can be optimized without backpropagation. The rendered numerical results are exploratory outputs, not a benchmark: a reproducible claim requires fixed package versions, deterministic evaluation seeds, an untouched test-seed set, repeated runs and uncertainty intervals.
+The `LunarLander-v3` experiment optimizes an MLP without backpropagation. It executes a fixed four-phase evolutionary schedule, separates development seeds from final test seeds and reports a 500-step-horizon evaluation. The final policy does **not** solve the task on the held-out seed set.
 
 ---
 
@@ -22,47 +22,27 @@ We treat the neural network weights as a genome ($\theta$) and optimize them usi
 
 ## Experimental Pipeline (The 4 Phases)
 
-This project implements a unique 4-phase training pipeline designed to overcome the common pitfall of **Overfitting in Evolutionary Algorithms**.
+The population size is 100 throughout. Phase 1 uses 100 generations on training seed 1337. Phase 2 uses 30 generations and the same three training seeds for each candidate. Phase 3 runs 20 generations after retaining the elite and introducing random individuals and strongly mutated copies. Phase 4 runs 15 generations from elite clones with mutation standard deviation 0.002.
 
-### Phase 1: Exploration (The Overfitting Trap)
-* **Method:** Standard Genetic Algorithm with elitism evaluated on a fixed seed.
-* **Outcome:** The agent achieved a high score of **267**, but validation revealed it was a "Paper Tiger" that had merely memorized the training terrain.
-* **Reality Check:** The success rate on unseen maps was only **1%**.
-
-### Phase 2: Robust Fine-Tuning
-* **Method:** The evaluation metric was switched to **Monte Carlo Smoothing** ($K=3$ runs per agent) to penalize agents that relied on luck.
-* **Outcome:** Performance initially collapsed to -1.09 as the "lucky" agents failed, but the population subsequently learned to generalize the underlying physics.
-* **Result:** A stable, generalist score of ~128.
-
-### Phase 3: Genetic Recycling (Escaping Local Optima)
-* **Method:** To escape the local optimum of Phase 2, we applied **Targeted Gene Recycling**:
-    1.  Preserved the elite agent.
-    2.  Re-initialized 80% of the population to force diversity.
-    3.  Subjected clones of the elite to massive mutation ($\sigma=0.5$).
-* **Result:** This "explosive" step discovered a superior solution region, jumping to a score of **272.64**.
-
-### Phase 4: Refined Local Exploitation
-* **Method:** **Monoculture Initialization**. The population was filled with clones of the best agent and subjected to ultra-low mutation ($\sigma=0.002$).
-* **Result:** This phase optimized fuel consumption and landing softness by fractions of a percent, reaching the final score of **288.94**.
+Common training seeds make candidate comparisons consistent. Development seeds are used for diagnostics, while seeds 30000–30099 are reserved for the final evaluation. All phases use the same 500-step limit. The single-seed Phase 1 best training reward is **277.46**; the final multi-seed training score is about **251.18**. Those scores use different objectives and are not directly comparable improvements.
 
 ---
 
 ## Exploratory results
 
-### 1. Performance Comparison
-The transition between phases illustrates a possible optimization trajectory. It must not be read as evidence of generalization until it is re-evaluated on a locked set of unseen seeds over multiple independent training runs.
+The final test over 100 reserved seeds gives:
 
-| Metric | Phase 1 (Naive) | Phase 4 (Final) | Improvement |
-| :--- | :--- | :--- | :--- |
-| **Best Score** | Archived notebook output | Archived notebook output | Requires repeated evaluation |
-| **Success Rate** | Archived notebook output | Archived notebook output | Requires a locked test-seed set |
-| **Crash Rate** | Archived notebook output | Archived notebook output | Requires confidence intervals |
+| Metric | Result |
+| :--- | ---: |
+| Mean episode reward | -79.37 |
+| Approximate 95% interval for mean reward | [-104.49, -54.25] |
+| Episodes with reward > 200 | 5% |
+| Episodes with reward < -100 | 43% |
 
-### 2. The Geometry of Learning (t-SNE)
-We visualized the high-dimensional evolutionary history ($\mathbb{R}^{836} \to \mathbb{R}^2$) using t-SNE. The plot reveals a distinct **"V-Shape" trajectory**:
-* **The Detour:** The population did not move in a straight line; it first had to navigate around a region of poor fitness (crashing).
-* **The Pivot:** A sharp turn at Generation 75 corresponds to the moment the evolutionary pressure shifted from "survival" (hovering) to "solving" (landing).
-* **Convergence:** The trajectory ends in a dense cluster, indicating high genetic specialization.
+Reward thresholds are score categories, not independently inspected landing/crash labels. The interval summarizes evaluation-seed variability for one trained policy; it does not cover variation across independent evolutionary training runs.
 
-### 3. Conclusion
-The experiment motivates further evaluation of evolutionary strategies on sparse or non-differentiable rewards. It does not establish that the task has been solved; validation must isolate selection from evaluation and report the distribution across seeds.
+The t-SNE plot visualizes saved genomes from the 836-parameter network. It cannot establish a fitness-landscape topology, causal learning stages or a generation at which landing was learned. Frame animations provide qualitative development-seed examples; the final numerical evaluation uses separate seeds.
+
+## Reproduction
+
+Use the [shared Python environment](../RUNNING.md), including `gymnasium[box2d]`, and execute [notebook.ipynb](notebook.ipynb) from this directory. Evaluation renders into notebook animations without opening native game windows.

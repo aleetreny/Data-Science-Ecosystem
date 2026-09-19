@@ -1,56 +1,35 @@
 # Kepler KOI: Mixed-Type MDS and Clustering Analysis
 
-This project performs a comprehensive Multidimensional Scaling (MDS) and Clustering analysis on the **Kepler Object of Interest (KOI)** dataset. Using advanced statistical techniques for mixed-type data, the analysis aims to separate true planetary candidates from instrumental noise and astrophysical false positives (like eclipsing binaries).
+This exploratory analysis combines numeric, binary and categorical Kepler KOI descriptors, constructs a joint dissimilarity and examines low-dimensional projections and clusters. It does not identify new planets or establish separation of physical signal from noise.
 
-## Overview
+## Data and workflow
 
-The analysis is divided into two major phases:
-1.  **Phase I: MDS Analysis (RelMS):** Construction of a joint metric space that integrates quantitative, binary, and categorical variables while removing inter-group redundancy.
-2.  **Phase II: Clustering & Profiling:** Unsupervised discovery of sub-populations within the Kepler data and physical characterization of the resulting clusters.
+The bundled [df_koi.csv](df_koi.csv) contains 8,054 records and 153 source columns. [Code.r](Code.r) selects variables, handles complete cases, transforms skewed measurements and samples 1,000 rows with a fixed seed. The [NASA KOI column reference](https://exoplanetarchive.ipac.caltech.edu/docs/API_kepcandidate_columns.html) defines the inputs; `koi_fpflag_ss` means stellar-eclipse flag and transit depth is measured in ppm.
 
-## Key Methodologies
+The script compares distances within three variable blocks:
 
-### 1. Mixed-Type Distance Metrics
-To handle the heterogeneous nature of the data, specific distances are applied to different variable types:
-* **Quantitative:** Robust Mahalanobis distance (via MCD) to account for covariance between stellar properties (Mass, Radius, Temp).
-* **Binary:** Jaccard distance to handle sparse flag data (e.g., False Positive flags).
-* **Categorical:** Hamming (Matching) distance for discretized classes (Insolation and Magnitude levels).
+- Numeric measurements: Euclidean, Manhattan and robust Mahalanobis distances.
+- Binary flags: matching, Jaccard and Dice distances; two all-zero flag vectors have distance zero.
+- Categorical measurements: matching distance for discretized insolation and magnitude.
 
-### 2. Relationship Metric Space (RelMS)
-The project implements the **RelMS** algorithm to:
-* Ensure **commensurability** by scaling matrices based on geometric variability ($V_k$).
-* Remove **redundancy** between data sources using a cross-product correction term in the Gram matrix construction.
-* Apply **Constant Shift** to ensure the resulting distance matrix is Euclidean for MDS projection.
+A **RelMS-style construction** normalizes block Gram matrices by geometric variability and combines them using the cross-product formula shown in the source. Positive-semidefinite square roots are used for that construction. The code reports negative eigenvalues and applies a constant shift when required to obtain a Euclidean embedding. This particular implementation and correction should not be treated as a proven removal of redundancy or noise.
 
-### 3. Clustering Logic
-* **Tendency:** Validated via the **Hopkins Statistic** and **VAT (Visual Assessment of Tendency)**.
-* **Hierarchy:** Agglomerative clustering using **Ward’s Method** to identify the tree structure.
-* **Partitioning:** **PAM (Partitioning Around Medoids)** used for the final 7-cluster solution, determined by Elbow and Silhouette optimization.
+## Diagnostics and clustering
 
-## Project Structure
+The corrected MDS coordinates retain only **1.36% of total positive eigenvalue mass in two dimensions** and **2.55% in five** in this execution. Low-dimensional displays therefore represent a small part of the corrected geometry. The constant shift contributes to the spectrum and must be considered when interpreting these percentages.
 
-### Phase I: MDS Workflow
-* **Data Preparation:** Log-transformation of skewed physical variables and sample reduction ($N=1000$).
-* **Metric Construction:** Calculation of $D_1^2$, $D_2^2$, and $D_3^2$ and assembly into the Joint RelMS Metric.
-* **Stability Analysis:**
-    * **Jackknife:** Procrustes alignment to measure positional uncertainty of objects.
-    * **Bootstrap:** Eigenvalue stability to confirm the dominance of MDS dimensions.
-* **Interpretation:** Correlation heatmaps and "Snake Plots" (trajectories) to map physical variables onto the MDS dimensions.
+Repeated 90% subsampling with Procrustes alignment summarizes displacement; the plotted radii are mean resampling deviations, not confidence intervals or a formal leave-one-out jackknife. Bootstrap eigenvalue summaries assess variation under the stated resampling procedure.
 
-### Phase II: Clustering Workflow
-* **Optimization:** Comparing $k=2$ (Binary Hypothesis) vs $k=7$ (Granular Reality).
-* **Validation:** Adjusted Rand Index (ARI) to compare clusters against official NASA dispositions.
-* **Profiling:**
-    * **Snake Plots:** Standardized Z-score "DNA" for each cluster.
-    * **Radar/Spider Charts:** Multivariate comparison of cluster properties.
-    * **Relative Importance Heatmaps:** Percentage deviation from the global mean.
+The script includes Hopkins diagnostics, an ordinary ordered distance heatmap, hierarchical clustering and PAM comparisons. The heatmap is not a VAT algorithm. The seven-cluster solution is an exploratory choice alongside k=2; neither the elbow nor silhouette plots establish it as uniquely optimal.
 
-## Final Insights
+ARI comparisons against dispositions and threshold-derived labels are descriptive. Several labels reuse the input variables, so they cannot provide independent validation. Cluster profiles show transformed-variable z-scores or relative physical-scale means, not predictive feature importance. Heuristic labels describe large inferred radius, insolation and flag prevalence; they do not establish planet composition, habitability or an instrumental cause. No measured superiority over Gower is claimed.
 
-The analysis reveals that the Kepler dataset is best described by a **7-cluster model**:
+## Running
 
-* **Signal Clusters:** Identified "Warm Super-Earths" (best candidates) and "Scorched Sub-Neptunes".
-* **Noise Clusters:** Successfully isolated "Instrumental Artifacts" and "Eclipsing Binaries" based on physical impossibility (extreme radii) and high error-flag percentages.
-* **Methodological Value:** RelMS proved superior to standard Gower by effectively de-noising the geometry, providing a clearer separation between astrophysical signal and noise.
+Use the [shared R environment](../RUNNING.md), then run from this directory:
 
-**Data Source:** NASA Exoplanet Archive (Kepler Candidate Columns).
+```bash
+Rscript Code.r
+```
+
+The script generates the figures and prints spectral, clustering and resampling diagnostics. Its covariance estimates, distance conventions and dimensional truncation are explicit modeling choices.

@@ -1,6 +1,6 @@
 # Gray-Scott Reaction-Diffusion Simulation
 
-A numerical laboratory exploring **Turing Patterns** via the Gray-Scott reaction-diffusion model. This project simulates two chemical species interacting on a 2D grid to produce complex, emergent biological patterns like spots, stripes, and cells.
+A numerical laboratory exploring **Turing Patterns** via the Gray-Scott reaction-diffusion model. This project simulates two chemical species interacting on a 2D grid to produce spatial patterns like spots, stripes, and cells.
 
 ## How it Works
 
@@ -22,5 +22,5 @@ Where:
 ## Features
 
 - **Vectorized Implementation:** Uses `NumPy` array operations instead of slow Python loops for high performance.
-- **Periodic Boundaries:** The grid wraps around the edges (toroidal topology) to prevent edge artifacts.
-- **Real-time Visualization:** Uses `Matplotlib` to render the evolution of the pattern dynamically.
+- **Periodic Boundaries:** The grid wraps around the edges (toroidal topology) to model a periodic domain.
+- **Snapshot Animation:** Uses `Matplotlib` to animate saved states after the simulation completes.

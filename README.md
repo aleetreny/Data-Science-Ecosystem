@@ -19,6 +19,8 @@ Python • R • SQL • Jupyter Notebooks • Git • LaTeX
 
 ## Reproducibility
 
-See [RUNNING.md](RUNNING.md) for the tested Python environment, the R/Quarto
-execution commands, verification steps, and the small number of projects that
-require local datasets, a solver licence, or private API credentials.
+See [RUNNING.md](RUNNING.md) for the tested environments, execution commands,
+dataset sources and verification steps. [AUDIT.md](AUDIT.md) records the review
+of all 18 project directories, reproduced results and remaining validation limits.
+Some datasets must be supplied separately, Gurobi requires a suitable licence,
+and API credentials are needed only for optional music-data enrichment.

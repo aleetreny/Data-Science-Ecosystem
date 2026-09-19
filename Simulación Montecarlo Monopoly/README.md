@@ -35,7 +35,7 @@ The `Monopoly.R` script generates a series of plots to visualize these findings:
 *   **Profitability Curve:** Break-even analysis based on the number of houses (1-4 and Hotel).
 *   **Efficiency Matrix:** Investment vs. Expected Return comparison.
 *   **Risk Profile:** Classification of properties by Frequency vs. Damage (Impact).
-*   **Survival Curve:** Simulation of how many turns opponents survive against each strategy.
+*   **Survival Curve:** Simulation of how many independent landing steps opponents survive against each strategy.
 *   **Board Skyline:** Visual representation of the economic value of each street.
 
 ## Technical Requirements
@@ -49,3 +49,9 @@ Quick installation:
 ```r
 install.packages("tidyverse")
 ```
+
+## Simulated rules and economic assumptions
+
+Each observation is the final square after a dice roll and any chained card movement, including failed jail rolls. Doubles on release from jail do not start a new doubles streak. Cards are independent draws with replacement; held cards, optional early jail release, ownership, trades and bankruptcy feedback are omitted. The movement rules follow [Hasbro's classic instructions](https://www.hasbro.com/common/instruct/Monopoly.pdf), with these explicit simplifications.
+
+Rent comparisons assume full colour-group ownership, uniform development and four owned stations. Utilities are excluded because their rent depends on dice and card context. Special card rent multipliers are omitted. Expected rent is per opponent roll, not per full turn; marginal group payback divides total extra investment by total extra expected rent. The survival scenario replaces individual street rents with their conditional mean and samples independent impacts; it is not a game trajectory.

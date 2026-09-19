@@ -22,7 +22,7 @@ The first project implements a straightforward, loop-based approach to discover 
 
 ### Key Features
 
-- **Image Processing**: Reads and visualizes melanoma images in full resolution
+- **Image Processing**: Reads the RGB image and analyzes every fourth row and column
 - **Data Whitening**: Transforms RGB data to zero mean with identity covariance matrix using eigendecomposition
 - **Sequential Search**: Uses explicit for-loops to exhaustively test 64,800 projection directions on a 3D sphere (360° × 180° in spherical coordinates)
 - **Fisher Index Optimization**: Evaluates each projection direction by:
@@ -35,7 +35,7 @@ The first project implements a straightforward, loop-based approach to discover 
 
 ### Workflow
 
-1. **Load and Subsample Image**: Reads melanoma image and subsamples (1 out of every 4 pixels) for faster computation
+1. **Load and Subsample Image**: Reads melanoma image and subsamples (every fourth row and column, about 1/16 of pixels) for faster computation
 2. **Whiten Data**: Converts RGB channels to a matrix and applies whitening transformation
 3. **Find IC1**: Searches entire sphere to find the projection maximizing the Fisher Index
 4. **Find IC2**: Searches only the orthogonal circle to find the best perpendicular projection
@@ -56,13 +56,13 @@ pracma::cross()          # Calculate orthogonal vectors
 ### Expected Output
 
 - Histograms of each projection showing bimodal distributions
-- Binary segmentation maps distinguishing melanoma from skin
+- Binary unsupervised colour-cluster maps
 - 3D surface plot of the Fisher Index optimization landscape
 - Grayscale representations of each orthogonal projection
 
 ### Performance Considerations
 
-- **Computation Time**: Approximately 10-30 minutes (depending on hardware)
+- **Computation Time**: Measure locally; the first search evaluates 64,800 directions, with 10 k-means initializations per direction
 - **Memory Usage**: Moderate; subsampling reduces pixel count significantly
 - **Best Use**: Educational purposes, algorithm understanding, and prototyping
 
@@ -72,34 +72,36 @@ pracma::cross()          # Calculate orthogonal vectors
 
 ### Description
 
-The second project encapsulates the algorithm within a single, reusable function that implements **parallel computing** to dramatically accelerate the optimization process. It processes full-resolution images without subsampling and includes configurable k-means parameters.
+The second project encapsulates the algorithm within a single, reusable function that implements **parallel computing** to parallelize the optimization process. It processes full-resolution images without subsampling and includes configurable k-means parameters.
 
 ### Key Features
 
 - **Parallelized IC1 Search**: Distributes the 64,800 direction tests across multiple CPU cores using `foreach` and `doParallel`
 - **Full Resolution Processing**: No subsampling required; operates on complete image data
 - **Reusable Function**: Self-contained function with clear parameter interface
-- **Automatic Library Management**: Automatically installs and loads required packages
+- **Explicit Dependencies**: Requires packages to be installed before execution
 - **Configurable k-means**: Adjustable `nstart` and `niter` parameters (defaults: 5 and 25)
 - **Vectorized Output**: Returns a 3D array containing all three orthogonal projections
 
 ### Function Signature
 
 ```r
-findOptimalProjections(image_path, nstart_kmeans = 5, niter_kmeans = 25)
+findOptimalProjections(image_path, nstart_kmeans = 5, niter_kmeans = 25, workers = 2L, seed = 42L)
 ```
 
 **Parameters:**
 - `image_path`: String path to the input image (e.g., "Melanoma.jpg")
 - `nstart_kmeans`: Number of random initializations for k-means (default: 5)
 - `niter_kmeans`: Maximum iterations for k-means algorithm (default: 25)
+- `workers`: Number of parallel worker processes (default: 2)
+- `seed`: Seed used to derive deterministic seeds for each direction (default: 42)
 
 **Returns:**
 - 3D array of dimensions (height, width, 3), where each layer contains the grayscale projection for IC1, IC2, and IC3
 
 ### Workflow
 
-1. **Initialize**: Set up parallel backend using all available cores minus one
+1. **Initialize**: Set up parallel backend using an explicit worker count (default: two)
 2. **Load and Prepare**: Read full-resolution image and store original dimensions
 3. **Whiten Data**: Apply identical whitening transformation as Project 1
 4. **Parallel IC1 Search**: Distribute 64,800 projection evaluations across cores using `%dopar%`
@@ -117,12 +119,9 @@ library(doParallel)    # Parallel backend registration
 library(pracma)        # Cross product for vector algebra
 ```
 
-### Expected Performance
+### Performance
 
-- **Speedup**: 4-8× faster than sequential version (depending on CPU cores)
-- **Computation Time**: 2-5 minutes on typical modern hardware (8-core processor)
-- **Memory Usage**: Higher due to parallel cluster creation, but manageable
-- **Scalability**: Linear speedup with additional CPU cores (up to practical limits)
+Runtime depends on image size, worker count and k-means settings. The two examples use different resolutions and restart counts, so their times are not a controlled parallel-speedup benchmark. Each worker needs its own working data.
 
 ### Usage Example
 
@@ -135,9 +134,11 @@ projections <- findOptimalProjections("Melanoma.jpg", nstart_kmeans = 10, niter_
 
 # Visualize the results
 par(mfrow = c(1, 3), mar = c(1, 1, 3, 1))
-image(projections[,,1], main = "IC1", col = grey.colors(256))
-image(projections[,,2], main = "IC2", col = grey.colors(256))
-image(projections[,,3], main = "IC3", col = grey.colors(256))
+for (component in 1:3) {
+  image(t(projections[dim(projections)[1]:1,,component]),
+        main = paste0("IC", component), col = grey.colors(256),
+        axes = FALSE, asp = dim(projections)[1] / dim(projections)[2])
+}
 par(mfrow = c(1, 1))
 ```
 
@@ -185,12 +186,11 @@ where $v_1, v_2$ form an orthonormal basis for the plane perpendicular to IC1.
 |--------|----------------------|----------------------|
 | **Image Processing** | Subsampled | Full resolution |
 | **Computation** | for-loops | foreach %dopar% |
-| **Speed** | ~15-30 minutes | ~2-5 minutes |
-| **Scalability** | Limited | Excellent |
-| **Complexity** | Simple, educational | Advanced, production-ready |
+| **Speed** | Must be measured | Must be measured on matching inputs |
+| **Scalability** | One process | Bounded by workers, memory and overhead |
+| **Complexity** | Simple, educational | Reusable experimental function |
 | **Parameters** | Hardcoded | Flexible function parameters |
 | **Memory Usage** | Lower | Higher (cluster overhead) |
-| **Code Length** | ~150 lines | ~200 lines (with comments) |
 
 ---
 
@@ -199,7 +199,7 @@ where $v_1, v_2$ form an orthonormal basis for the plane perpendicular to IC1.
 ```
 .
 ├── First_Approach.R       # Sequential implementation (educational)
-├── Second_Approach.R      # Parallel implementation (production)
+├── Second_Approach.R      # Parallel implementation
 ├── Melanoma.jpg           # Input dermatological image
 └── README.md              # This file
 ```
@@ -212,7 +212,7 @@ where $v_1, v_2$ form an orthonormal basis for the plane perpendicular to IC1.
 
 ```r
 # Install if not already installed
-packages <- c("OpenImageR", "foreach", "doParallel", "pracma", "Rfast", "plotly")
+packages <- c("OpenImageR", "foreach", "doParallel", "pracma", "plotly")
 for (pkg in packages) {
   if (!require(pkg, character.only = TRUE)) {
     install.packages(pkg)
@@ -224,7 +224,6 @@ library(OpenImageR)
 library(foreach)
 library(doParallel)
 library(pracma)
-library(Rfast)
 library(plotly)
 ```
 
@@ -265,7 +264,7 @@ source("First_Approach.R")
 # Source the function definition
 source("Second_Approach.R")
 
-# The script automatically calls the function with the example image.
+# Running Rscript executes the example; source() only defines the function.
 # To use with a different image or parameters, call:
 results <- findOptimalProjections("Melanoma.jpg", nstart_kmeans = 10, niter_kmeans = 30)
 
@@ -275,7 +274,9 @@ ic2 <- results[,,2]
 ic3 <- results[,,3]
 
 # Visualize
-image(ic1, main = "First Independent Component", col = grey.colors(256))
+image(t(ic1[nrow(ic1):1, , drop = FALSE]),
+      main = "First Orthogonal Projection", col = grey.colors(256),
+      axes = FALSE, asp = nrow(ic1) / ncol(ic1))
 ```
 
 ---
@@ -287,7 +288,7 @@ image(ic1, main = "First Independent Component", col = grey.colors(256))
 Each of the three orthogonal projections reveals different colour-contrast
 structures in the image:
 
-- **Projection 1**: The strongest bimodal colour projection in this image
+- **Projection 1**: The highest Fisher index among the tested grid directions
 - **IC2**: Captures secondary structural variations orthogonal to IC1
 - **IC3**: Orthogonal complement, completes the 3D basis
 
@@ -306,12 +307,12 @@ projection. Cluster labels do not have clinical meaning without ground truth.
 
 ### Computational Complexity
 
-- **IC1 Search**: O(n_directions × n_pixels × n_kmeans_iterations)
+- **IC1 Search**: O(n_directions × n_pixels × n_kmeans_iterations × nstart)
   - n_directions = 64,800 (360 × 180)
-  - n_pixels ≈ 76,800-307,200 (depending on resolution)
+  - n_pixels = actual image rows × columns after any subsampling
   - n_kmeans_iterations = 40 (default in Project 1)
 
-- **IC2 Search**: O(n_angles × n_pixels × n_kmeans_iterations)
+- **IC2 Search**: O(n_angles × n_pixels × n_kmeans_iterations × nstart)
   - n_angles = 360 (only circular search)
   - Much faster than IC1 search
 
@@ -319,11 +320,11 @@ projection. Cluster labels do not have clinical meaning without ground truth.
 
 ### Parallelization Efficiency
 
-With $p$ cores, the IC1 search speedup is approximately:
+With $p$ cores, an idealized Amdahl bound for a computation with serial fraction $f$ is:
 
-$$\text{Speedup} \approx p \times (1 - f)$$
+$$\text{Speedup} \approx 1 / (f + (1 - f)/p)$$
 
-where $f$ is the fraction of non-parallelizable code (typically 5-10%).
+where $f$ is the fraction of serial runtime. This bound excludes communication and memory overhead; neither $f$ nor speedup is measured here.
 
 ---
 
@@ -346,7 +347,7 @@ setwd("~/path/to/your/project")
 
 ```r
 # Try alternative repository
-options(repos=c(CRAN="http://cran.r-project.org"))
+options(repos=c(CRAN="https://cloud.r-project.org"))
 install.packages("package_name")
 
 # Or update packages
@@ -359,7 +360,7 @@ update.packages()
 
 ### Issue: Memory Error on Large Images
 
-**Solution**: Use the sequential version with subsampling, or increase available RAM. You can also reduce `nstart_kmeans` to lower memory consumption.
+**Solution**: Use the sequential version with subsampling, or increase available RAM. Reduce `workers` to limit replicated data; fewer k-means restarts primarily reduce runtime.
 
 ---
 
@@ -376,7 +377,7 @@ update.packages()
 ## References
 
 - Hyvärinen, A., & Oja, E. (2000). Independent Component Analysis: Algorithms and Applications. *Neural Networks*, 13(4-5), 411-430.
-- ISIC Archive: https://www.isic-archive.com/ (Dermatological image dataset source)
+- Image provenance: the repository does not record an accession or source URL for `Melanoma.jpg`; its clinical label and origin are unverified.
 - R Documentation: https://www.r-project.org/
 
 ---
@@ -398,7 +399,7 @@ This project is provided as-is for educational purposes. Feel free to modify and
 ## Notes
 
 - Both projects process the same melanoma image using different computational strategies
-- The parallel version is recommended for production use and large-scale applications
-- Results can vary slightly due to k-means random initialization; set seeds for reproducibility
+- Both implementations are educational experiments, without clinical validation
+- The parallel function seeds each direction separately so results do not depend on worker scheduling
 - For optimal segmentation quality, consider tuning k-means parameters via the `nstart_kmeans` and `niter_kmeans` arguments
 - Ensure the image file is in the same directory as your R scripts, or provide the full path to the image

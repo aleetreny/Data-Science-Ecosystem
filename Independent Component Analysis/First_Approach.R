@@ -4,7 +4,6 @@
 # ---------------------------------------------------------------------------------
 
 library(OpenImageR)
-library(Rfast)
 library(plotly)
 library(pracma)
 
@@ -13,9 +12,10 @@ library(pracma)
 # Subsampling is performed to accelerate initial calculations.
 # ---------------------------------------------------------------------------------
 Im = readImage("Melanoma.jpg")
+stopifnot(length(dim(Im)) == 3L, dim(Im)[3] == 3L, all(is.finite(Im)))
 dim(Im)
 
-# Subsample the image (takes 1 out of every 4 pixels) to reduce computation time.
+# Subsample the image (takes every fourth row and column, about 1/16 of pixels) to reduce computation time.
 Im_R = Im[seq(1, nrow(Im), 4), seq(1, ncol(Im), 4),]
 dim(Im_R)
 
@@ -39,7 +39,10 @@ covIm_R_Matrix = cov(Im_R_Matrix_Centered)
 eigIm_R_Matrix = eigen(covIm_R_Matrix)
 
 # d) Apply the whitening transformation
-D_inv_sqrt = diag(1 / sqrt(eigIm_R_Matrix$values))
+if (min(eigIm_R_Matrix$values) <= max(eigIm_R_Matrix$values) * 1e-10) {
+    stop("RGB covariance is singular or ill-conditioned; three whitened directions are undefined.")
+  }
+  D_inv_sqrt = diag(1 / sqrt(eigIm_R_Matrix$values))
 W = eigIm_R_Matrix$vectors %*% D_inv_sqrt
 Im_R_Matrix_W = Im_R_Matrix_Centered %*% W
 
@@ -91,9 +94,9 @@ cat("Sequential computation finished.\n")
 Results_matrix = matrix(Results, nrow=360, ncol=180, byrow=FALSE)
 
 # Find the angles corresponding to the maximum Fisher Index
-max_idx = which(Results_matrix == max(Results_matrix), arr.ind=TRUE)
-theta_max = max_idx[1]
-phi_max = max_idx[2]
+max_idx = which.max(Results)
+theta_max = coords$theta[max_idx]
+phi_max = coords$phi[max_idx]
 
 # Reconstruct the optimal direction vector (dir_max)
 x_max = cos(theta_max*pi/180) * sin(phi_max*pi/180)
@@ -109,10 +112,10 @@ hist(proj_max, breaks=50, main="Histogram of Maximum Projection (IC1)")
 # Segment the image based on the clustering of the optimal projection
 clusters_max = kmeans(proj_max, centers=2, iter.max=10, nstart=2)$cluster
 segmented_image = matrix(clusters_max, nrow=nrow(Im_R), ncol=ncol(Im_R))
-image(segmented_image, col=c("black","white"), main="Segmentation - Maximum Projection (IC1)")
+image(t(segmented_image[nrow(segmented_image):1, , drop = FALSE]), asp=nrow(Im_R)/ncol(Im_R), col=c("black","white"), main="Segmentation - Maximum Projection (IC1)")
 
 # 3D plot of the Fisher Index optimization surface
-plot_ly(x = theta_seq, y = phi_seq, z = ~Results_matrix) %>% add_surface() %>%
+plot_ly(x = theta_seq, y = phi_seq, z = t(Results_matrix)) %>% add_surface() %>%
   layout(title="Fisher Index Optimization Surface",
          scene = list(xaxis=list(title="Theta"), yaxis=list(title="Phi"), zaxis=list(title="Fisher Index")))
 
@@ -157,14 +160,14 @@ hist(proj_ortho_optimal, breaks = 50, main = "Histogram of Optimal Orthogonal Pr
 
 # --- Grayscale Visualization of the Second Projection ---
 proj_matrix_ortho_grayscale <- matrix(proj_ortho_optimal, nrow = nrow(Im_R), ncol = ncol(Im_R))
-image(proj_matrix_ortho_grayscale,
+image(t(proj_matrix_ortho_grayscale[nrow(proj_matrix_ortho_grayscale):1, , drop = FALSE]),
       main = "Optimal Projection (IC2) in Grayscale",
-      col = grey.colors(256))
+      col = grey.colors(256), asp = nrow(Im_R)/ncol(Im_R))
 
 # --- Binary Segmentation of the Second Projection ---
 clusters_ortho <- kmeans(proj_ortho_optimal, centers=2, iter.max=10, nstart=2)$cluster
 segmented_image_ortho <- matrix(clusters_ortho, nrow = nrow(Im_R), ncol = ncol(Im_R))
-image(segmented_image_ortho, col=c("black","white"), main="Segmentation - Optimal Orthogonal Projection (IC2)")
+image(t(segmented_image_ortho[nrow(segmented_image_ortho):1, , drop = FALSE]), asp=nrow(Im_R)/ncol(Im_R), col=c("black","white"), main="Segmentation - Optimal Orthogonal Projection (IC2)")
 
 # ---------------------------------------------------------------------------------
 ## 5. Third Orthogonal Component (IC3)
@@ -179,11 +182,11 @@ hist(proj_third, breaks = 50, main = "Histogram of the Third Projection (IC3)")
 
 # --- Grayscale Visualization of the Third Projection ---
 proj_matrix_third_grayscale <- matrix(proj_third, nrow = nrow(Im_R), ncol = ncol(Im_R))
-image(proj_matrix_third_grayscale,
+image(t(proj_matrix_third_grayscale[nrow(proj_matrix_third_grayscale):1, , drop = FALSE]),
       main = "Third Projection in Grayscale",
-      col = grey.colors(256))
+      col = grey.colors(256), asp = nrow(Im_R)/ncol(Im_R))
 
 # --- Binary Segmentation of the Third Projection ---
 clusters_third <- kmeans(proj_third, centers=2, iter.max=10, nstart=2)$cluster
 segmented_image_third <- matrix(clusters_third, nrow=nrow(Im_R), ncol=ncol(Im_R))
-image(segmented_image_third, col=c("black","white"), main="Segmentation - Third Projection (IC3)")
+image(t(segmented_image_third[nrow(segmented_image_third):1, , drop = FALSE]), asp=nrow(Im_R)/ncol(Im_R), col=c("black","white"), main="Segmentation - Third Projection (IC3)")

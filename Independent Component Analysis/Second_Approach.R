@@ -1,8 +1,8 @@
 # =================================================================================
 # This script defines a function, 'findOptimalProjections', that processes a 
 # full-resolution image, whitens the color data, and then sequentially
-# finds three orthogonal projection directions that maximize
-# the bimodality of the projected data, measured by the Fisher Index.
+# searches finite angle grids for two orthogonal directions with high Fisher
+# separation. The third direction is their orthogonal complement.
 # The process is computationally intensive and leverages parallel programming.
 # =================================================================================
 
@@ -10,8 +10,8 @@
 
 #' Find Optimal Projections for Image Segmentation
 #' This function takes the file path of an image, performs data whitening, and
-#' uses a parallelized search to find three orthogonal projection axes that
-#' best separate the data into two distinct clusters.
+#' searches for two orthogonal projection axes with high Fisher separation,
+#' then obtains the third axis from their cross product.
 #'
 #' @param image_path A string containing the path to the input image.
 #' @param nstart_kmeans An integer specifying the 'nstart' parameter for the
@@ -22,23 +22,31 @@
 #'         in the third dimension is a 2D matrix representing the grayscale
 #'         image of one of the three optimal projections (IC1, IC2, IC3).
 
-findOptimalProjections = function(image_path, nstart_kmeans = 5, niter_kmeans = 25) {
+findOptimalProjections = function(image_path, nstart_kmeans = 5, niter_kmeans = 25,
+                                   workers = 2L, seed = 42L) {
+  stopifnot(length(workers) == 1L, is.finite(workers), workers >= 1, workers == as.integer(workers),
+            nstart_kmeans >= 1, niter_kmeans >= 1, length(seed) == 1L, is.finite(seed))
   
   # --- 1.1: Load Required Libraries ---
   # We ensure all necessary packages are installed and loaded for the function to run.
   # - OpenImageR: For reading and handling image files.
   # - foreach, doParallel: For setting up and executing the parallel computation.
   # - pracma: Provides the 'cross' product function needed for vector algebra.
-  if (!require(OpenImageR)) { install.packages("OpenImageR"); library(OpenImageR) }
-  if (!require(foreach)) { install.packages("foreach"); library(foreach) }
-  if (!require(doParallel)) { install.packages("doParallel"); library(doParallel) }
-  if (!require(pracma)) { install.packages("pracma"); library(pracma) }
+  if (!requireNamespace("OpenImageR", quietly = TRUE)) stop("Install OpenImageR before running this analysis.")
+  library(OpenImageR)
+  if (!requireNamespace("foreach", quietly = TRUE)) stop("Install foreach before running this analysis.")
+  library(foreach)
+  if (!requireNamespace("doParallel", quietly = TRUE)) stop("Install doParallel before running this analysis.")
+  library(doParallel)
+  if (!requireNamespace("pracma", quietly = TRUE)) stop("Install pracma before running this analysis.")
+  library(pracma)
   
   cat("Step 1: Reading and preparing the full-resolution image...\n")
   
   # --- 1.2: Read Image Data ---
   # The image is loaded into a 3D array.
   Im = readImage(image_path)
+  stopifnot(length(dim(Im)) == 3L, dim(Im)[3] == 3L, all(is.finite(Im)))
   # We store the original dimensions to reconstruct the images later.
   original_dims = dim(Im)
   
@@ -52,8 +60,7 @@ findOptimalProjections = function(image_path, nstart_kmeans = 5, niter_kmeans = 
   # We convert the 3D image array into a 2D matrix where each row is a pixel
   # and each column is a color channel (Red, Green, Blue).
   # R stores each channel as a contiguous slice of the 3D array.  Binding
-  # channel vectors explicitly is essential: matrix(Im, ncol = 3) groups
-  # neighbouring values within a channel instead of RGB values of one pixel.
+  # channel vectors explicitly preserves RGB alignment for each pixel.
   Im_Matrix = cbind(
     as.vector(Im[, , 1]),
     as.vector(Im[, , 2]),
@@ -73,6 +80,9 @@ findOptimalProjections = function(image_path, nstart_kmeans = 5, niter_kmeans = 
   eigIm_Matrix = eigen(covIm_Matrix)     # Eigendecomposition
   
   # D^(-1/2) is a diagonal matrix with 1/sqrt(eigenvalue) on the diagonal.
+  if (min(eigIm_Matrix$values) <= max(eigIm_Matrix$values) * 1e-10) {
+    stop("RGB covariance is singular or ill-conditioned; three whitened directions are undefined.")
+  }
   D_inv_sqrt = diag(1 / sqrt(eigIm_Matrix$values))
   # The whitening matrix W rotates and scales the data.
   W = eigIm_Matrix$vectors %*% D_inv_sqrt
@@ -88,14 +98,14 @@ findOptimalProjections = function(image_path, nstart_kmeans = 5, niter_kmeans = 
   
   # 3.1: Setup Parallel Backend
   # We create a cluster of worker processes to distribute the computational load.
-  # We use one less than the total number of available cores.
-  num_cores = detectCores() - 1
+  # Explicit worker count keeps memory usage bounded and works on single-core hosts.
+  num_cores = as.integer(workers)
   cl = makeCluster(num_cores)
   registerDoParallel(cl)
-  on.exit(stopCluster(cl))
+  on.exit({ stopCluster(cl); registerDoSEQ() }, add = TRUE)
   
   # 3.2: Define the Search Space
-  # We need to test every possible projection direction in 3D space. These directions
+  # Test a finite one-degree grid of projection directions in 3D space. These directions
   # can be represented as unit vectors on the surface of a sphere. We generate these
   # vectors using spherical coordinates (theta and phi angles).
   theta_seq = 1:360 # Azimuthal angle
@@ -114,6 +124,7 @@ findOptimalProjections = function(image_path, nstart_kmeans = 5, niter_kmeans = 
   n_clusters = 2
   fisher_results_ic1 = foreach(i = 1:nrow(directions), .combine = 'c') %dopar% {
     
+    set.seed(seed + i)  # Stable per-direction RNG, independent of worker scheduling.
     # Select a candidate direction vector.
     dir = directions[i,]
     # Project the 3D whitened data onto this 1D direction.
@@ -135,7 +146,7 @@ findOptimalProjections = function(image_path, nstart_kmeans = 5, niter_kmeans = 
   # We find the index of the maximum Fisher Index value. This index corresponds
   # to the direction vector that produced the best separation.
   max_idx = which.max(fisher_results_ic1)
-  dir_max = directions[max_idx,] # This is our first Independent Component (IC1)
+  dir_max = directions[max_idx,] # This is our first projection direction (IC1)
   cat("   - IC1 found:", dir_max, "\n")
   
   
@@ -147,7 +158,7 @@ findOptimalProjections = function(image_path, nstart_kmeans = 5, niter_kmeans = 
   # 4.1: Create an Orthonormal Basis for the Plane Perpendicular to IC1
   # We use a method similar to the Gram-Schmidt process to find two basis
   # vectors (v_base1, v_base2) that span the plane orthogonal to dir_max (IC1).
-  set.seed(42)
+  set.seed(seed)
   v_base1 = rnorm(3) # Start with a random vector
   v_base1 = v_base1 - sum(v_base1 * dir_max) * dir_max # Make it orthogonal to dir_max
   v_base1 = v_base1 / sqrt(sum(v_base1^2)) # Normalize it to unit length
@@ -229,6 +240,8 @@ findOptimalProjections = function(image_path, nstart_kmeans = 5, niter_kmeans = 
 # To use the function, we run the function with the image used in First_Approach.R ("Melanoma.jpg"),
 # but the idea of the function is that it can be used with other images
 
+# Run the example only when invoked as a script; sourcing defines the function.
+if (sys.nframe() == 0L) {
 # 1. Call the function and store the result.
 projection_images = findOptimalProjections("Melanoma.jpg")
 
@@ -237,7 +250,9 @@ cat("Dimensions of the output array:", dim(projection_images), "\n")
 
 # 3. Visualize the three resulting projection images.
 par(mfrow = c(1, 3), mar = c(1, 1, 3, 1)) # Setup a 1x3 plot grid
-image(projection_images[,,1], main = "Projection 1 (IC1)", col = grey.colors(256), xaxt = 'n', yaxt = 'n')
-image(projection_images[,,2], main = "Projection 2 (IC2)", col = grey.colors(256), xaxt = 'n', yaxt = 'n')
-image(projection_images[,,3], main = "Projection 3 (IC3)", col = grey.colors(256), xaxt = 'n', yaxt = 'n')
+image(t(projection_images[dim(projection_images)[1]:1,,1]), main = "Projection 1 (IC1)", col = grey.colors(256), xaxt = 'n', yaxt = 'n', asp = dim(projection_images)[1]/dim(projection_images)[2])
+image(t(projection_images[dim(projection_images)[1]:1,,2]), main = "Projection 2 (IC2)", col = grey.colors(256), xaxt = 'n', yaxt = 'n', asp = dim(projection_images)[1]/dim(projection_images)[2])
+image(t(projection_images[dim(projection_images)[1]:1,,3]), main = "Projection 3 (IC3)", col = grey.colors(256), xaxt = 'n', yaxt = 'n', asp = dim(projection_images)[1]/dim(projection_images)[2])
 par(mfrow = c(1, 1))
+
+}

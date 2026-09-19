@@ -45,30 +45,29 @@ The data collection pipeline is itself worth a moment of attention: **13,611 bea
 imaged under controlled laboratory conditions, and 16 morphological descriptors were extracted
 from each image using computer vision techniques. These features capture everything from raw
 size (area, perimeter, major/minor axis length) to shape regularity (compactness, roundness,
-solidity) and outline texture (convex area, equivalent diameter).
+solidity) and derived size descriptors (convex area, equivalent diameter).
 
-The seven target classes are:
+The seven target classes have the following descriptive summaries in the source data
+(before duplicate removal):
 
-| Variety | Characteristics |
-|------------|---------------------------------------------------------------|
-| **Seker** | Small, round; high solidity |
-| **Barbunya** | Medium, mottled; elongated shape |
-| **Bombay** | Largest beans in the dataset; very elongated |
-| **Cali** | Medium-large; high convexity |
-| **Dermason** | Most frequent class; small and elongated |
-| **Horoz** | Large, elongated; distinctive shape |
-| **Sira** | Medium, irregular outline; hardest to distinguish |
+| Variety | Source rows | Median Area (pixels) |
+|---------|------------:|---------------------:|
+| **Seker** | 2,027 | 39,180 |
+| **Barbunya** | 1,322 | 69,582 |
+| **Bombay** | 522 | 171,494.5 |
+| **Cali** | 1,630 | 74,791.5 |
+| **Dermason** | 3,546 | 31,890 |
+| **Horoz** | 1,928 | 53,800.5 |
+| **Sira** | 2,636 | 44,593 |
 
-> **Why is this an interesting problem?** In agricultural contexts, bean variety
-> misclassification directly affects market price, storage requirements, and seed purity.
-> Manual grading by human experts is slow and inconsistent. Automated vision-based systems
-> that can classify thousands of grains per minute are genuinely useful; and the features
-> in this dataset are exactly what such a system would produce.
+> **Why is this an interesting problem?** Automated variety classification can
+> support grain grading. This dataset lets us compare classifiers using measurements
+> extracted from bean images; this analysis does not benchmark an industrial sorting line.
 
 ## What We Will Do
 
 We apply and compare **four families of classification methods** studied throughout the course,
-each implemented from scratch on the same dataset with the same train/test split:
+each implemented with scikit-learn on the same dataset with the same train/test split:
 
 1. **k-Nearest Neighbors (KNN)**; distance-based, non-parametric, sensitive to scale and *k*
 2. **Support Vector Machines (SVM)**; margin-maximizing, with linear and RBF kernels
@@ -85,8 +84,7 @@ what each model's internal structure reveals about the geometry of this particul
 #| label: install
 #| eval: false
 
-# Run once to install the UCI repository interface
-# %pip install ucimlrepo scikit-learn matplotlib seaborn torch -q
+# Install the pinned project environment following ../RUNNING.md before rendering.
 ```
 
 ```{python}
@@ -97,6 +95,17 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import seaborn as sns
+from pathlib import Path
+from IPython.display import HTML, display
+from plotly.offline import get_plotlyjs
+
+# Load Plotly once. Quarto handles document formulas with KaTeX; loading
+# MathJax from each Plotly output breaks its extension paths when embedded.
+display(HTML('<script>' + get_plotlyjs() + '</script>'))
+
+def show_plot(fig):
+    display(HTML(fig.to_html(full_html=False, include_plotlyjs=False,
+                             include_mathjax=False)))
 
 from ucimlrepo import fetch_ucirepo
 
@@ -117,21 +126,44 @@ print("Libraries loaded successfully.")
 ```{python}
 #| label: load-data
 
-# Fetch the Dry Bean Dataset directly from UCI (ID = 602)
-dry_bean = fetch_ucirepo(id=602)
+# Reuse the source snapshot; network access is only needed on the first run.
+cache_path = Path("data/dry_beans.csv")
+if cache_path.is_file():
+    raw_records = pd.read_csv(cache_path, float_precision="round_trip")
+else:
+    dry_bean = fetch_ucirepo(id=602)
+    raw_records = pd.concat([dry_bean.data.features, dry_bean.data.targets], axis=1)
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_records.to_csv(cache_path, index=False)
 
-X = dry_bean.data.features   # 16 morphological features
-y = dry_bean.data.targets     # Bean variety label
+expected_features = ["Area", "Perimeter", "MajorAxisLength", "MinorAxisLength",
+    "AspectRatio", "Eccentricity", "ConvexArea", "EquivDiameter", "Extent",
+    "Solidity", "Roundness", "Compactness", "ShapeFactor1", "ShapeFactor2",
+    "ShapeFactor3", "ShapeFactor4"]
+assert raw_records.shape == (13611, 17), "Unexpected UCI source dimensions"
+assert raw_records.columns.tolist() == expected_features + ["Class"]
+X = raw_records[expected_features]
+y = raw_records[["Class"]]
+assert np.isfinite(X.to_numpy()).all() and y.notna().all().all()
+assert set(y["Class"]) == {"SEKER", "BARBUNYA", "BOMBAY", "CALI", "DERMASON", "HOROZ", "SIRA"}
+# Exact repeated records must not appear on both sides of the evaluation split.
+model_records = raw_records.drop_duplicates().reset_index(drop=True)
+X_clean = model_records[X.columns]
+y_clean = model_records['Class']
+print(f"Exact duplicate records removed before splitting: {len(raw_records) - len(model_records)}")
+print(f"Unique records used for modeling: {len(model_records):,}")
 
 print("── Dataset metadata ──────────────────────────────────")
-print(f"  Name        : {dry_bean.metadata['name']}")
+print("  Name        : Dry Bean Dataset (UCI 602)")
 print(f"  Num. samples: {X.shape[0]:,}")
 print(f"  Num. features: {X.shape[1]}")
 print(f"  Target classes: {sorted(y['Class'].unique().tolist())}")
 print(f"  Missing values: {X.isnull().sum().sum()}")
 ```
 
-The 16 features can be grouped into three conceptual families, each capturing a different
+The source has 68 exact repeated records. We remove these before every modeling split, leaving 13,543 unique records (10,834 training and 2,709 test observations). Raw class counts below describe the original source. Removing duplicates prevents identical records from crossing the split; it does not identify unrecorded dependencies between distinct grains.
+
+The 16 features can be grouped into four conceptual families, each capturing a different
 geometric aspect of the bean's silhouette:
 
 **Size features** measure the raw footprint of the grain. `Area` is the total pixel count
@@ -142,7 +174,7 @@ shape.
 
 **Axis and elongation features** capture how oblong the bean is. `MajorAxisLength` and
 `MinorAxisLength` are the lengths of the ellipse axes that best fit the bean's outline.
-`AspectRation` is (note: the original dataset uses this spelling) simply their ratio (a circle gives 1.0; a very elongated bean gives a
+`AspectRatio` is their ratio (a circle gives 1.0; a very elongated bean gives a
 much higher value). `Eccentricity` is the related ellipse statistic: 0 for a perfect
 circle, approaching 1 for a line.
 
@@ -151,8 +183,8 @@ of size. `Roundness` is 4π·Area/Perimeter², penalising jagged
 outlines. `Compactness` is the ratio of the bean's equivalent diameter to its major axis
 length. `Solidity` is the ratio of `Area` to `ConvexArea`; a bean with indentations or
 concavities will have solidity below 1. `Extent` is the ratio of `Area` to the area of
-the bounding rectangle, which decreases for highly elongated or irregularly positioned
-grains.
+the bounding rectangle. It depends on the outline and orientation; elongation
+alone does not necessarily reduce this ratio.
 
 Finally, `ShapeFactor1` through `ShapeFactor4` are composite indices derived in the
 original Koklu & Ozkan (2020) paper, combining axis lengths and area in various ways to
@@ -161,13 +193,13 @@ create rotation-invariant descriptors of bean shape.
 | Group | Features |
 |---|---|
 | Size | Area, Perimeter, ConvexArea, EquivDiameter |
-| Elongation | MajorAxisLength, MinorAxisLength, AspectRation, Eccentricity |
+| Elongation | MajorAxisLength, MinorAxisLength, AspectRatio, Eccentricity |
 | Regularity | Roundness, Compactness, Solidity, Extent |
 | Composite | ShapeFactor1, ShapeFactor2, ShapeFactor3, ShapeFactor4 |
 
 ```{python}
 #| label: class-distribution
-#| fig-cap: "Class distribution in the Dry Bean Dataset. Dermason is the most common variety (26%), while Bombay is the rarest (5%). The mild imbalance is worth keeping in mind when interpreting per-class metrics later."
+#| fig-cap: "Class counts and percentages in the Dry Bean dataset. Bombay is the rarest variety (522 of 13,611 grains, 3.8%)."
 
 import plotly.express as px
 
@@ -188,18 +220,17 @@ fig.update_layout(
     yaxis_tickformat=',',
     margin=dict(t=50, b=40)
 )
-fig.show()
+show_plot(fig)
 ```
 
-The dataset is **reasonably balanced**; no class represents less than 5% of the total; which
-means accuracy will be a meaningful summary metric alongside per-class F1 scores. The one
-variety to watch is **Bombay**: with only ~522 samples it is the rarest, but it also happens
-to be the morphologically most distinct (it is visibly larger than every other class), so
-models tend to classify it with near-perfect recall regardless.
+The dataset is **moderately imbalanced**: Bombay is the rarest class, with 522
+source samples (3.8%), and Dermason is the most frequent. Bombay has the highest
+median Area, but that alone does not establish separation in every feature or
+predict recall. We report accuracy, macro F1 and per-class errors below.
 
 ---
 
-> The following sections each tackle one family of methods. Each section is self-contained:
+> The following sections each tackle one family of methods. Sections must be run in order and share fitted models and imports:
 > data is re-split using the same seed, so results are directly comparable across methods.
 
 ---
@@ -238,8 +269,8 @@ PALETTE     = px.colors.qualitative.Bold
 ```{python}
 #| label: knn-data-prep
 
-X_raw = dry_bean.data.features
-y_raw = dry_bean.data.targets['Class']
+X_raw = X_clean
+y_raw = y_clean
 
 X_train, X_test, y_train, y_test = train_test_split(
     X_raw, y_raw, test_size=0.2, random_state=SEED, stratify=y_raw)
@@ -254,7 +285,7 @@ print(f"  ShapeFactor1: [{X_train['ShapeFactor1'].min():.6f}, {X_train['ShapeFac
 The output makes the problem immediate: `Area` spans values from roughly 20,000 to 250,000,
 while `ShapeFactor1` lives in the range [0.003, 0.010]. Without scaling, Euclidean
 distance between any two beans is dominated almost entirely by `Area` and `ConvexArea`;
-the twelve shape-ratio features contribute essentially nothing. Standardising to zero mean
+the smaller-scale shape features contribute essentially nothing. Standardising to zero mean
 and unit variance gives every feature an equal voice in the distance calculation.
 
 ```{python}
@@ -300,16 +331,11 @@ print(f"Best  k={best_k}  ->  CV accuracy={best_acc:.4f}")
 print(f"k=30  CV={cv_accs[-1]:.4f}")
 ```
 
-At *k*=1 the model memorises the training set perfectly (train accuracy 1.0000) but already
-achieves a test accuracy of 0.8986, a gap of 0.1014. This is a textbook signature of
-overfitting: the decision boundary follows every individual training point, including noisy
-ones. As *k* grows the boundary smooths out and test accuracy climbs, peaking at *k*=30
-with an accuracy of **0.9207**. Beyond that point the neighbourhood grows so large that
-distant, dissimilar beans begin influencing predictions and accuracy would start to decline.
+The training/CV gap diagnoses overfitting within the training partition. The chosen value is k = `{python} best_k`, with CV accuracy `{python} f"{best_acc:.4f}"`. This grid ends at 30, so it cannot establish behavior for larger k.
 
 ```{python}
 #| label: fig-k-sweep
-#| fig-cap: "Train vs. test accuracy across k values from 1 to 30. The gap at k=1 is the overfit regime; test accuracy rises steadily and plateaus near k=30, the optimal value identified by this sweep."
+#| fig-cap: "Training and five-fold cross-validation accuracy across k=1 to 30. The vertical line marks the CV-selected value within this grid."
 
 fig = go.Figure()
 
@@ -336,7 +362,7 @@ fig.update_layout(
     legend=dict(yanchor='bottom', y=0.02, xanchor='right', x=0.98),
     template='plotly_white', height=420
 )
-fig.show()
+show_plot(fig)
 ```
 
 ## Fitting the Final Model
@@ -357,29 +383,19 @@ print(classification_report(y_test, y_pred_knn,
 
 The classification report deserves careful reading class by class.
 
-**BOMBAY** is classified perfectly: precision 1.0000, recall 1.0000. As the morphologically
-largest variety by a wide margin, it occupies an isolated corner of the feature space with
-no overlap from any other class, so regardless of *k*, a BOMBAY bean's nearest neighbors
-are always other BOMBAY beans.
+The report gives per-class precision, recall and F1 on the fixed test split. A perfect score for any class on this sample does not guarantee perfect classification on future grains.
 
-**HOROZ, SEKER, and CALI** all exceed 0.93 F1, reflecting that their size-and-shape
-combinations are distinctive enough that neighborhoods stay pure even at *k*=30.
+Compare each variety using both its support and F1 score; aggregate accuracy alone can hide class-specific errors.
 
-**BARBUNYA** sits at 0.9170 F1 with recall 0.8755: around 33 of 265 BARBUNYA beans in the
-test set are misclassified, mostly as CALI (19 cases) or SIRA (9 cases). These two classes
-share overlapping perimeter and axis-length ranges with BARBUNYA, so some beans land in
-mixed neighborhoods.
+The confusion matrix below identifies which varieties account for each class's observed errors.
 
-**SIRA** is the hardest class with F1 0.8649. Its recall of 0.8748 means that 66 SIRA beans
-are missed, and looking at the confusion matrix, 50 of them are predicted as DERMASON. This
-SIRA/DERMASON pair is the dominant confusion in the entire dataset, and it will reappear
-across every method we test.
+The largest off-diagonal entries identify the main confusion pairs for this fitted model.
 
 ## Confusion Matrix
 
 ```{python}
 #| label: fig-knn-cm
-#| fig-cap: "Normalised confusion matrix for KNN (k=30). Rows are true labels, columns predicted. Diagonal values show per-class recall. The SIRA row reveals the dominant error: 50 SIRA beans are labelled as DERMASON, the single largest off-diagonal entry in the matrix."
+#| fig-cap: "Held-out confusion matrix for the CV-selected KNN. Rows are true labels and columns are predictions; annotations show recall proportions and counts."
 
 cm_knn  = confusion_matrix(y_test, y_pred_knn, labels=CLASS_ORDER)
 cm_norm = cm_knn.astype(float) / cm_knn.sum(axis=1, keepdims=True)
@@ -405,20 +421,14 @@ fig.update_layout(
     annotations=annotations, template='plotly_white',
     height=520, yaxis_autorange='reversed'
 )
-fig.show()
+show_plot(fig)
 ```
 
-Two error clusters stand out on the heatmap. The first is the **SIRA row**: 9.5% of SIRA
-beans are called DERMASON. Both are medium-sized elongated varieties; their `MajorAxisLength`
-and `Perimeter` distributions overlap substantially, meaning that in the standardised 16D
-space their clusters are adjacent rather than separated. The second cluster involves
-**BARBUNYA and CALI**, which share similar convexity and axis-length profiles, leading to
-bidirectional confusion at a lower rate.
+Interpret row-normalized percentages together with their counts. Similar geometric measurements may help explain confusion, but these results do not establish that the errors are unavoidable.
 
 ## PCA Visualisation: Seeing the Problem in 2D
 
-Sixteen features cannot be plotted directly, but PCA onto two dimensions retains 81.9% of
-the total variance here, making it a faithful snapshot of the structure in the data.
+PCA provides a two-dimensional exploratory projection. Its variance percentage describes feature variation, not classification information.
 
 ```{python}
 #| label: knn-pca
@@ -438,7 +448,7 @@ print(f"Total 2D variance retained: {var1+var2:.1%}")
 
 ```{python}
 #| label: fig-pca-scatter
-#| fig-cap: "PCA projection of all 13,611 beans onto PC1 and PC2. 81.9% of total variance is retained, making this a reliable 2D summary. Colour encodes variety; note how BOMBAY sits entirely isolated on the right, while SIRA and DERMASON overlap in the centre-left of the plot."
+#| fig-cap: "Exploratory PCA fitted to all observations, separate from model selection. Explained variance is reported in the axes and does not measure retained class information."
 
 fig = px.scatter(
     pca_df.sample(frac=1, random_state=SEED),
@@ -456,22 +466,12 @@ fig.update_layout(
     legend_title_text='Variety',
     legend=dict(itemsizing='constant')
 )
-fig.show()
+show_plot(fig)
 ```
 
-The PCA plot puts the confusion matrix results in geometric context. **BOMBAY** is the
-rightmost isolated cluster, entirely separated from all other varieties; this is why it
-achieves perfect classification scores. **DERMASON** forms a compact cluster on the
-far left, separated along PC1 from the medium-to-large varieties. The difficult region is
-the **centre of the plot**, where SIRA and DERMASON partially overlap, explaining the
-50 SIRA beans predicted as DERMASON we observed in the confusion matrix. BARBUNYA, CALI,
-and HOROZ sit adjacent to one another in the upper-centre, corresponding to the secondary
-confusion cluster.
+The PCA plot offers geometric context for the confusion matrix. Overlap in this projection does not prove overlap in the full feature space, and separation does not guarantee future classification accuracy.
 
-With 81.9% variance retained in just two components, this PCA tells a nearly complete
-story: the main axis of variation (PC1) captures size, separating small beans (DERMASON,
-SIRA) from large ones (BOMBAY, HOROZ, CALI). The rest of the discriminative information
-lives in shape features along PC2 and beyond.
+PCA is fitted on all unique observations for exploration only; it is not used by the evaluated classifiers. Remaining components can contain discriminative information even when their variance is small.
 
 ## KNN Summary
 
@@ -492,13 +492,7 @@ print(f"Macro-average F1      : {report_dict['macro avg']['f1-score']:.4f}")
 print(f"Optimal k             : {best_k}")
 ```
 
-KNN achieves **92.07% overall accuracy** on this dataset, a strong baseline given that it
-uses no parametric assumptions whatsoever. Its main limitation here is computational: every
-prediction requires a full nearest-neighbor search over 10,888 scaled training points in
-16 dimensions, which becomes expensive at deployment scale. More importantly, it offers no
-insight into which features drive the classification. The next section examines whether an
-SVM, which explicitly constructs decision hyperplanes and exposes their coefficients, can
-do better while also telling us something about the feature geometry.
+The held-out KNN accuracy is `{python} f"{knn_test_accuracy:.4f}"`. Prediction requires a nearest-neighbor search over the training data. The next section compares linear and RBF SVMs on the same split.
 
 ---
 
@@ -524,8 +518,8 @@ magnitudes and support vector counts.
 from sklearn.svm import SVC
 
 # Re-use identical split and scaler from the KNN section
-X_raw = dry_bean.data.features
-y_raw = dry_bean.data.targets['Class']
+X_raw = X_clean
+y_raw = y_clean
 
 X_train, X_test, y_train, y_test = train_test_split(
     X_raw, y_raw, test_size=0.2, random_state=SEED, stratify=y_raw)
@@ -542,7 +536,7 @@ PALETTE     = px.colors.qualitative.Bold
 
 A small *C* penalises margin violations lightly, producing a wide margin with more
 misclassified training points; a large *C* tries to classify everything correctly at the
-cost of a narrower, potentially overfit margin. We sweep *C* over two orders of magnitude
+cost of a narrower, potentially overfit margin. We sweep *C* over four orders of magnitude
 for both the linear and RBF kernels.
 
 ```{python}
@@ -573,16 +567,16 @@ print(f"Best C (RBF)    : {best_C_rbf}  ->  {max(rbf_accs):.4f}")
 
 ```{python}
 #| label: fig-svm-c-sweep
-#| fig-cap: "Test accuracy for linear and RBF SVM across C values. The linear kernel improves modestly from C=0.01 to C=5, then plateaus. The RBF kernel keeps climbing slowly all the way to C=50, reflecting its greater capacity to exploit tighter, non-linear margins in the training data."
+#| fig-cap: "Five-fold training-partition CV accuracy for linear and RBF SVM across C values."
 
 fig = go.Figure()
 fig.add_trace(go.Scatter(
-    x=[str(c) for c in Cs], y=lin_accs, mode='lines+markers',
+    x=Cs, y=lin_accs, mode='lines+markers',
     name='Linear kernel', line=dict(color='#4C72B0', width=2.5),
     marker=dict(size=8), hovertemplate='C=%{x}<br>Acc=%{y:.4f}<extra></extra>'
 ))
 fig.add_trace(go.Scatter(
-    x=[str(c) for c in Cs], y=rbf_accs, mode='lines+markers',
+    x=Cs, y=rbf_accs, mode='lines+markers',
     name='RBF kernel', line=dict(color='#c44e52', width=2.5, dash='dash'),
     marker=dict(size=8, symbol='diamond'),
     hovertemplate='C=%{x}<br>Acc=%{y:.4f}<extra></extra>'
@@ -591,21 +585,17 @@ fig.add_hline(y=max(lin_accs), line_dash='dot', line_color='#4C72B0', opacity=0.
 fig.add_hline(y=max(rbf_accs), line_dash='dot', line_color='#c44e52', opacity=0.4)
 
 fig.update_layout(
-    title='SVM: Test Accuracy vs. Regularisation Parameter C',
-    xaxis_title='C value (log scale labels)',
-    yaxis_title='Test Accuracy', yaxis_tickformat='.4f',
+    title='SVM: CV Accuracy vs. Regularisation Parameter C',
+    xaxis_title='C (log scale)',
+    xaxis=dict(type='log', tickmode='array', tickvals=Cs, ticktext=[str(c) for c in Cs]),
+    yaxis_title='CV Accuracy', yaxis_tickformat='.4f',
     legend=dict(yanchor='bottom', y=0.02, xanchor='right', x=0.98),
     template='plotly_white', height=420
 )
-fig.show()
+show_plot(fig)
 ```
 
-The sweep reveals an important difference between the two kernels. The **linear kernel**
-plateaus quickly: once *C* reaches 5 the gain is negligible, and the best accuracy is
-**0.9232**. The **RBF kernel** continues improving as *C* increases, peaking at *C*=50
-with **0.9262**, a small but consistent improvement. This tells us that the non-linear
-boundaries carved out by the RBF kernel benefit from a tighter margin, allowing the model
-to fit the more complex overlap regions between SIRA, DERMASON, and the medium-bean cluster.
+The selected C values are `{python} best_C_lin` for the linear kernel and `{python} best_C_rbf` for RBF. These choices maximize the corresponding CV curves; their final test scores are computed below.
 
 ## Fitting Both Kernels
 
@@ -634,40 +624,28 @@ print(f"  Support vectors per class : {svm_rbf.n_support_}")
 print(f"  Total support vectors     : {sum(svm_rbf.n_support_)} / {X_train_s.shape[0]} training points ({sum(svm_rbf.n_support_)/X_train_s.shape[0]:.1%})")
 ```
 
-With the real dataset the support vector picture is much healthier than datasets with poor
-separability: the linear SVM retains **1,976 support vectors, about 18% of training
-points**, and the RBF model 1,841 (17%). These are reasonable fractions; it means the
-margin is finding genuine structure rather than resting on almost every training point.
-The largest contributor of support vectors in both models is DERMASON (529 and 505
-respectively), consistent with its central role in the SIRA/DERMASON confusion: its cluster
-boundary is not clean, and many points near the edge become support vectors.
+The output reports support-vector counts for both fitted models. These counts describe model complexity but do not independently establish generalization quality.
 
 ```{python}
 #| label: svm-reports
 
-print("── Linear SVM (C=5) ───────────────────────────────────")
+print(f"── Linear SVM (C={best_C_lin}) ───────────────────────────────────")
 print(classification_report(y_test, y_pred_lin,
                              target_names=CLASS_ORDER, digits=4))
-print("── RBF SVM (C=50, gamma=scale) ────────────────────────")
+print(f"── RBF SVM (C={best_C_rbf}, gamma=scale) ────────────────────────")
 print(classification_report(y_test, y_pred_rbf,
                              target_names=CLASS_ORDER, digits=4))
 ```
 
-Both kernels produce very similar per-class profiles. **BOMBAY** is again perfect under RBF
-(1.0000 / 1.0000) and near-perfect under linear (recall 0.9904, one single misclassified
-bean predicted as BARBUNYA). **HOROZ and SEKER** are both above 0.95 F1 across the board.
+Per-class reports show the precision/recall tradeoffs for each kernel on the same held-out observations.
 
-The persistent difficulty, as with KNN, is **SIRA**: F1 of 0.8661 (linear) and 0.8706
-(RBF). The confusion matrix will show that SIRA loses beans to DERMASON in both directions,
-a structural overlap that neither kernel resolves. Notably, **BARBUNYA** recovers strongly
-compared to our earlier simulated results; with the real data it achieves F1 > 0.92,
-confirming that the simulated dataset had exaggerated the difficulty of that class.
+Use the confusion matrices to compare the observed errors. Similar errors across these models are not evidence of an irreducible error floor.
 
 ## Comparing Confusion Matrices: Linear vs. RBF
 
 ```{python}
 #| label: fig-svm-cm-compare
-#| fig-cap: "Side-by-side normalised confusion matrices for linear and RBF SVM. The SIRA/DERMASON mutual confusion is the dominant off-diagonal pattern in both models. Both kernels produce 53-54 SIRA-to-DERMASON errors; the RBF kernel does not improve on the linear one for this specific confusion pair, and actually produces 54 such errors vs 53 for linear. The main RBF gain is in DERMASON recall and overall accuracy."
+#| fig-cap: "Held-out row-normalized confusion matrices for the CV-selected linear and RBF SVMs."
 
 cm_lin  = confusion_matrix(y_test, y_pred_lin, labels=CLASS_ORDER)
 cm_rbf  = confusion_matrix(y_test, y_pred_rbf, labels=CLASS_ORDER)
@@ -705,12 +683,12 @@ ann2 = make_cm_annotations(cm_rn, cm_rbf, 'x2', 'y2')
 fig.update_layout(
     annotations=list(fig.layout.annotations) + ann1 + ann2,
     height=970, template='plotly_white',
-    title=dict(text='SVM Confusion Matrices: Linear vs. RBF (normalised by true class)',
+    title=dict(text='Linear and RBF SVM: Confusion Matrices',
                y=0.99, x=0.5, xanchor='center', yanchor='top'),
     margin=dict(t=60)
 )
 fig.update_yaxes(autorange='reversed')
-fig.show()
+show_plot(fig)
 ```
 
 ## Feature Importance via Coefficient Magnitudes
@@ -722,7 +700,7 @@ single importance score per feature.
 
 ```{python}
 #| label: fig-svm-feature-importance
-#| fig-cap: "Mean absolute coefficient per feature across all 21 OvO linear SVM classifiers. Features higher in the chart displace the hyperplanes furthest in the standardised space and are therefore the most discriminative on average. Extent sits firmly at the bottom as the least useful feature."
+#| fig-cap: "Mean absolute standardized coefficient across 21 pairwise linear SVM classifiers. Correlated features affect the interpretation of these model-specific coefficients."
 
 feat_names = X_raw.columns.tolist()
 mean_abs   = np.abs(svm_lin.coef_).mean(axis=0)
@@ -736,24 +714,16 @@ fig = go.Figure(go.Bar(
     hovertemplate='%{y}: %{x:.4f}<extra></extra>'
 ))
 fig.update_layout(
-    title='Linear SVM: Feature Importance (mean |coef| across 21 OvO classifiers)',
+    title='Linear SVM: Mean Absolute Coefficients',
     xaxis_title='Mean |Coefficient|',
     template='plotly_white', height=480
 )
-fig.show()
+show_plot(fig)
 ```
 
-The real-data ranking yields a genuinely interesting result that differs from simple
-intuition. **ShapeFactor1 leads**, followed closely by **AspectRation and Eccentricity**.
-These are shape-ratio and elongation features, not raw size. This tells us something
-important: the linear SVM is finding that *how elongated a bean is* discriminates classes
-more reliably than *how large it is*. Size (Area, ConvexArea, Perimeter) does appear in
-the top half of the chart, but the elongation and shape-factor features are pulling the
-hyperplanes more decisively across the 21 binary problems.
+The chart ranks coefficient magnitudes in standardized feature space. These are descriptions of the fitted linear model; correlated measurements can share or redistribute coefficients.
 
-At the bottom, **Extent, ShapeFactor3, Compactness, and Solidity** contribute very little.
-These regularity features describe subtle outline properties shared broadly across varieties;
-in a linear model they add more noise than signal.
+Small coefficients do not establish that a feature is useless, adds noise or has no causal relevance.
 
 This ranking will be interesting to compare against the tree-based feature importances in
 the next section, where the model can combine features non-linearly; their relative ranking
@@ -776,13 +746,7 @@ print(pd.DataFrame(results).to_string(index=False))
 print(f"\nKNN reference accuracy (k={best_k}): {knn_test_accuracy:.4f}")
 ```
 
-Both SVM variants improve modestly over KNN (0.9232 and 0.9262 vs 0.9207). The RBF
-kernel's edge over the linear one is small but consistent across all C values examined,
-suggesting that the class boundaries in this 16-dimensional space are slightly curved rather
-than strictly planar. Neither kernel resolves the SIRA/DERMASON overlap, which remains the
-ceiling for this problem. The next section asks whether axis-aligned recursive partitioning,
-which can exploit feature interactions that linear hyperplanes cannot, pushes that ceiling
-higher.
+The summary reports final test scores and support-vector counts. Differences on one split are descriptive; repeated evaluation would be needed to assess their uncertainty.
 
 ---
 
@@ -812,8 +776,8 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 
-X_raw = dry_bean.data.features
-y_raw = dry_bean.data.targets['Class']
+X_raw = X_clean
+y_raw = y_clean
 
 X_train, X_test, y_train, y_test = train_test_split(
     X_raw, y_raw, test_size=0.2, random_state=SEED, stratify=y_raw)
@@ -840,23 +804,23 @@ the training data. We sweep depths from 1 to 20.
 
 depths     = list(range(1, 21))
 dt_train   = []
-dt_test    = []
+dt_cv    = []
 
 for d in depths:
     dt = DecisionTreeClassifier(max_depth=d, random_state=SEED)
     dt.fit(X_train, y_train)
     dt_train.append(accuracy_score(y_train, dt.predict(X_train)))
-    dt_test.append(cross_val_score(dt, X_train, y_train, cv=cv, scoring='accuracy', n_jobs=-1).mean())
+    dt_cv.append(cross_val_score(dt, X_train, y_train, cv=cv, scoring='accuracy', n_jobs=-1).mean())
 
-best_depth = depths[int(np.argmax(dt_test))]
-print(f"depth=1   test={dt_test[0]:.4f}  (near-chance: single split)")
-print(f"Best depth={best_depth}  train={dt_train[best_depth-1]:.4f}  test={dt_test[best_depth-1]:.4f}")
-print(f"depth=20  train={dt_train[-1]:.4f}  test={dt_test[-1]:.4f}  (overfit gap: {dt_train[-1]-dt_test[-1]:.4f})")
+best_depth = depths[int(np.argmax(dt_cv))]
+print(f"depth=1   CV={dt_cv[0]:.4f}  (single split)")
+print(f"Best depth={best_depth}  train={dt_train[best_depth-1]:.4f}  CV={dt_cv[best_depth-1]:.4f}")
+print(f"depth=20  train={dt_train[-1]:.4f}  CV={dt_cv[-1]:.4f}  (overfit gap: {dt_train[-1]-dt_cv[-1]:.4f})")
 ```
 
 ```{python}
 #| label: fig-tree-depth-sweep
-#| fig-cap: "Train vs. test accuracy for a single decision tree across max_depth values. At depth=1 the tree makes a single binary split and achieves just 40% accuracy. By depth=10 the test curve peaks. Deeper trees keep improving on training data but start declining on the test set, a clear overfit signal."
+#| fig-cap: "Training and five-fold CV accuracy across maximum tree depths. The selected depth maximizes CV accuracy on the training partition."
 
 fig = go.Figure()
 fig.add_trace(go.Scatter(
@@ -865,31 +829,26 @@ fig.add_trace(go.Scatter(
     hovertemplate='depth=%{x}<br>Train acc=%{y:.4f}<extra></extra>'
 ))
 fig.add_trace(go.Scatter(
-    x=depths, y=dt_test, mode='lines+markers', name='Test accuracy',
+    x=depths, y=dt_cv, mode='lines+markers', name='CV accuracy',
     line=dict(color='#DD8452', width=2), marker=dict(size=5),
-    hovertemplate='depth=%{x}<br>Test acc=%{y:.4f}<extra></extra>'
+    hovertemplate='depth=%{x}<br>CV acc=%{y:.4f}<extra></extra>'
 ))
 fig.add_vline(x=best_depth, line_dash='dash', line_color='#2ca02c',
-              annotation_text=f'Best depth={best_depth}  ({max(dt_test):.4f})',
+              annotation_text=f'Best depth={best_depth}  ({max(dt_cv):.4f})',
               annotation_position='bottom right',
               annotation_font_color='#2ca02c')
 
 fig.update_layout(
-    title='Decision Tree: Train vs. Test Accuracy across max_depth',
+    title='Decision Tree: Train vs. CV Accuracy across max_depth',
     xaxis_title='max_depth', yaxis_title='Accuracy',
     yaxis_tickformat='.3f',
     legend=dict(yanchor='top', y=0.98, xanchor='left', x=0.02),
     template='plotly_white', height=420
 )
-fig.show()
+show_plot(fig)
 ```
 
-The sweep confirms the classic bias-variance story for trees. At `depth=1`, the tree makes
-a single binary question and reaches only 40.5% accuracy; seven classes cannot be
-meaningfully separated by one threshold. The test curve climbs steeply through depths 2-7
-as the tree discovers the main discriminative splits, peaks at `depth=10` with **0.9056**,
-and then gently reverses as the tree becomes increasingly tailored to training-set noise.
-At `depth=20` the train/test gap opens to about 0.10, a sign of overfitting.
+The selected depth is `{python} best_depth`. The training/CV gap and the shape of the CV curve describe the effect of depth; the held-out test set is evaluated only after this choice.
 
 ## Inspecting the Best Tree
 
@@ -910,7 +869,7 @@ print(classification_report(y_test, y_pred_dt, target_names=CLASS_ORDER, digits=
 
 ```{python}
 #| label: fig-tree-visual
-#| fig-cap: "Visual structure of a depth-4 decision tree fitted on the Dry Bean training set. Each node shows the splitting feature and threshold, the Gini impurity, the sample count, and the majority class. Node colour encodes the majority class at that node using the same palette as the scatter plots. The root split on MajorAxisLength cleanly separates small beans (left branch, mostly DERMASON/SEKER) from large ones (right branch, BOMBAY/CALI/HOROZ)."
+#| fig-cap: "Illustrative depth-4 training-set tree, distinct from the CV-selected classifier. Node fill uses the default scikit-learn class palette and impurity shading."
 
 import matplotlib.patches as mpatches
 from sklearn.tree import plot_tree
@@ -940,34 +899,17 @@ ax_t.set_title(
     f'test acc: {accuracy_score(y_test, dt_vis.predict(X_test)):.4f}',
     fontsize=12, pad=10, fontweight='bold'
 )
-patches = [mpatches.Patch(color=TREE_PALETTE[i], label=vis_classes[i])
-           for i in range(len(vis_classes))]
-ax_t.legend(handles=patches, loc='lower center', ncol=7,
-            fontsize=9, framealpha=0.9, bbox_to_anchor=(0.5, -0.05))
 plt.tight_layout()
 plt.show()
 ```
 
-The root split is on **MajorAxisLength** at threshold ~281. This is immediately
-interpretable: beans with a major axis shorter than 281 units are predominantly small
-varieties (DERMASON, SEKER, shown in yellow and blue on the left branch); beans above
-that threshold are the larger ones (BOMBAY, HOROZ, CALI, BARBUNYA, on the right). The
-tree then recurses, using `ShapeFactor1`, `ShapeFactor3`, and `Compactness` to subdivide
-each branch further. Composite shape factors dominate the upper levels, not raw size
-features, consistent with the SVM coefficient ranking.
+The depth-4 tree is a separate illustration. Read its displayed feature names, thresholds and class labels directly; its structure need not match the CV-selected tree.
 
-The colour of each node encodes its majority class. A pure node (one colour, low Gini
-impurity) means the split has cleanly separated one class. The BOMBAY node on the right
-branch reaches near-zero impurity very quickly; any bean large enough and elongated
-enough lands in a nearly pure BOMBAY leaf.
+Node color and saturation encode majority class and impurity using scikit-learn's default palette. The diagram shows only the fitted rules, not their stability across samples.
 
 ## Random Forest
 
-A single depth-10 tree achieves 0.9056, which is already slightly below KNN and SVM.
-The inherent instability of a single tree is the problem: small changes to the training
-set would yield a noticeably different tree structure and different predictions. Random
-forests stabilise this by averaging over many trees trained on bootstrap samples, each
-using a random subset of features at each split.
+The selected single-tree accuracy is `{python} f"{dt_test_accuracy:.4f}"`. Random forests average predictions from bootstrap-trained trees to reduce variance, though this does not guarantee improvement on every dataset.
 
 ```{python}
 #| label: rf-ntrees-sweep
@@ -986,7 +928,7 @@ print(f"\nBest n_estimators={best_n}  ->  {max(rf_accs):.4f}")
 
 ```{python}
 #| label: fig-rf-ntrees-sweep
-#| fig-cap: "Random forest test accuracy as a function of the number of trees. The ensemble stabilises quickly: gains above 100 trees are marginal. The dashed red line shows the single best decision tree accuracy at depth=10 for reference."
+#| fig-cap: "Random forest five-fold CV accuracy by tree count. The reference line is the CV score of the selected single tree."
 
 fig = go.Figure()
 fig.add_trace(go.Scatter(
@@ -996,25 +938,21 @@ fig.add_trace(go.Scatter(
     marker=dict(size=9),
     hovertemplate='n_trees=%{x}<br>Acc=%{y:.4f}<extra></extra>'
 ))
-fig.add_hline(y=dt_test[best_depth-1], line_dash='dash', line_color='#c44e52',
-              annotation_text=f'Single tree (depth={best_depth}): {dt_test[best_depth-1]:.4f}',
+fig.add_hline(y=dt_cv[best_depth-1], line_dash='dash', line_color='#c44e52',
+              annotation_text=f'Single tree (depth={best_depth}): {dt_cv[best_depth-1]:.4f}',
               annotation_position='bottom right',
               annotation_font_color='#c44e52')
 
 fig.update_layout(
-    title='Random Forest: Test Accuracy vs. Number of Trees',
+    title='Random Forest: CV Accuracy vs. Number of Trees',
     xaxis_title='Number of Trees (n_estimators)',
-    yaxis_title='Test Accuracy', yaxis_tickformat='.4f',
+    yaxis_title='CV Accuracy', yaxis_tickformat='.4f',
     template='plotly_white', height=400
 )
-fig.show()
+show_plot(fig)
 ```
 
-The ensemble effect is visible immediately: even 10 trees already outperform the single
-best depth-10 tree (0.9130 vs 0.9056). The curve plateaus smoothly; the jump from 100 to
-200 trees adds less than 0.001 accuracy. Beyond 200, improvements are negligible, and
-the computational cost scales linearly with `n_estimators`. We use **200 trees** as the
-final model.
+The final forest uses `{python} best_n` trees, selected by training-fold CV. The curve shows the gains actually observed within the tested grid.
 
 ```{python}
 #| label: rf-final
@@ -1032,17 +970,9 @@ print(f"  Test acc   : {rf_test_accuracy:.4f}\n")
 print(classification_report(y_test, y_pred_rf, target_names=CLASS_ORDER, digits=4))
 ```
 
-The **OOB (out-of-bag) score** of 0.9255 is worth pausing on: each tree is trained on a
-bootstrap sample, so about 37% of the training data is left out per tree. Averaging
-predictions over those left-out samples gives a nearly unbiased estimate of generalisation
-performance without touching the test set. It comes out at 0.9255, very close to the
-actual test accuracy of 0.9221, confirming that the model is neither overfit nor
-optimistically biased.
+For a bootstrap of n draws from n observations, about 36.8% are omitted from each tree. OOB predictions use trees that did not train on the observation. The resulting score is a useful training-data diagnostic, but agreement with a test score does not prove absence of selection bias or overfitting.
 
-Per-class results mirror the pattern seen across all methods. **BOMBAY** is again perfect.
-**HOROZ** reaches its best F1 yet (0.9609). **SIRA** remains the ceiling at F1 0.8599; the
-forest distributes its SIRA errors slightly more than the single tree, but cannot resolve
-the structural SIRA/DERMASON overlap.
+The forest's held-out classification report and confusion matrix quantify its actual class-specific errors.
 
 ## Feature Importance: Tree vs. Forest vs. SVM
 
@@ -1052,7 +982,7 @@ coefficients reveals where the methods agree and where they diverge.
 
 ```{python}
 #| label: fig-feature-importance-compare
-#| fig-cap: "Feature importances from three models side by side. Single tree importances are concentrated in a few features (it relies heavily on ShapeFactor1 and ShapeFactor3 at the top splits). The random forest spreads importance more evenly across features because each tree uses a random feature subset. SVM coefficients highlight elongation features (ShapeFactor1, AspectRation, Eccentricity) that the tree methods downweight."
+#| fig-cap: "Normalized model-specific impurity and coefficient magnitudes. These quantities use different definitions and are not causal or model-agnostic feature effects."
 
 svm_imp = np.abs(svm_lin.coef_).mean(axis=0)
 # Normalise each to sum to 1 for fair visual comparison
@@ -1082,43 +1012,29 @@ for imp, name, color in [
 
 fig.update_layout(
     barmode='group',
-    title=dict(text='Feature Importance: Decision Tree vs. Random Forest vs. Linear SVM (normalised)',
+    title=dict(text='Feature Importance: Tree, Forest and SVM',
                y=0.98, x=0.5, xanchor='center', yanchor='top'),
     xaxis_title='Normalised Importance',
     template='plotly_white',
     height=600,
     legend=dict(orientation='h', yanchor='top', y=-0.08, xanchor='center', x=0.5)
 )
-fig.show()
+show_plot(fig)
 ```
 
-The grouped bar chart surfaces a genuine disagreement between methods. The **single tree**
-is extremely concentrated: `ShapeFactor1` and `ShapeFactor3` together account for over 46%
-of its importance, because the tree discovers two composite shape indices that cleave the
-data most efficiently at the top levels and then reuses them repeatedly in subtrees.
+The three rankings use different definitions: tree impurity decrease and standardized linear coefficients. Normalizing their magnitudes aids plotting but does not make them the same statistical quantity.
 
-The **random forest** distributes importance far more evenly. No single feature dominates;
-`ShapeFactor3`, `Perimeter`, `Compactness`, `ShapeFactor1`, and `MinorAxisLength` all
-contribute between 8% and 11%. This is a consequence of the random feature subsampling:
-because each split can only consider a random subset of features, correlated features that
-would otherwise be ignored get their turn, and the importance scores become more reliable
-proxies for true feature relevance.
+Random feature selection can distribute impurity importance across correlated measurements. This does not make impurity importance an unbiased measure of true feature relevance.
 
-The **linear SVM** stands apart in a revealing way: it ranks `Eccentricity` and
-`AspectRation` much higher than either tree method does. These are pure elongation ratios
-that a linear decision boundary can exploit directly, but a tree built on thresholds finds
-them less useful because the same information is partly redundant with the axis length
-features in the threshold-comparison world of tree splits.
+Coefficient magnitudes and impurity importance describe different fitted decision rules. Neither alone measures a feature's causal effect.
 
-The one point of strong agreement: **`Extent` is last or near-last in all three methods**,
-confirming that the bounding-rectangle fill ratio adds no discriminative information for
-this dataset.
+Low rank in several models is an observation about those models; it does not prove that a feature contains no useful information.
 
 ## Tree vs. Forest Confusion Matrix
 
 ```{python}
 #| label: fig-trees-cm-compare
-#| fig-cap: "Normalised confusion matrices for the best single tree (depth=10) and the random forest (200 trees). The forest reduces off-diagonal mass across most classes, most visibly in the DERMASON and HOROZ rows. The SIRA/DERMASON confusion persists in both, confirming it is a data-structure limitation rather than a modelling one."
+#| fig-cap: "Held-out confusion matrices for the CV-selected tree and forest. Persistent errors do not establish an irreducible error rate."
 
 cm_dt   = confusion_matrix(y_test, y_pred_dt, labels=CLASS_ORDER)
 cm_rf   = confusion_matrix(y_test, y_pred_rf, labels=CLASS_ORDER)
@@ -1156,12 +1072,12 @@ ann2 = cm_annotations(cm_rf_n, cm_rf, 'x2', 'y2')
 fig.update_layout(
     annotations=list(fig.layout.annotations) + ann1 + ann2,
     height=970, template='plotly_white',
-    title=dict(text='Decision Tree vs. Random Forest Confusion Matrices (normalised by true class)',
+    title=dict(text='Tree and Forest: Confusion Matrices',
                y=0.99, x=0.5, xanchor='center', yanchor='top'),
     margin=dict(t=60)
 )
 fig.update_yaxes(autorange='reversed')
-fig.show()
+show_plot(fig)
 ```
 
 ## Trees and Forests Summary
@@ -1182,41 +1098,19 @@ print(f"Linear SVM (C={best_C_lin})         {svm_lin_test_accuracy:.4f}     {svm
 print(f"RBF SVM (C={best_C_rbf})           {svm_rbf_test_accuracy:.4f}     {svm_rbf_macro_f1:.4f}")
 ```
 
-The single tree at **0.9056** is the weakest method so far, sitting below every other
-approach. This is not surprising: its axis-aligned, high-variance structure is a poor fit
-for a 16-dimensional space where class boundaries are curved, and a depth of 10 is a
-compromise between two failure modes (too shallow or too deep).
+The table reports held-out accuracy and macro F1 for the selected models. Ranking them on this test split is descriptive and should not be used for further tuning.
 
-The random forest at **0.9221** largely closes this gap, matching or slightly exceeding KNN
-and approaching the linear SVM. The OOB score of 0.9255 suggests there is a small
-upward bias in the test result, meaning the true generalisation performance is
-approximately in line with the other methods.
+OOB and test scores estimate performance using different samples and procedures. Their difference alone cannot identify the direction or size of bias.
 
-What tree-based models uniquely contribute to this analysis is **interpretability**: we can
-read the first three levels of the decision tree in plain language, and the feature
-importance scores give a reliable, model-agnostic ranking that is independent of the
-geometric assumptions made by SVM. The convergence of `ShapeFactor1`, `Perimeter`, and
-`MajorAxisLength` at the top of multiple importance rankings is strong evidence that these
-features are genuinely the most discriminative for dry bean classification, regardless of
-which algorithm you use to exploit them.
+Tree rules are readable and their feature importances are model-specific. They do not constitute a model-agnostic or causal ranking.
 
-The next and final section asks whether a neural network, which learns its own
-non-linear feature representations through backpropagation, can push beyond the 0.93
-ceiling that all previous methods seem to share.
+The next section evaluates MLP architectures using the same training-fold selection protocol.
 
 ---
 
 # Neural Networks (MLP)
 
-The first three sections share a philosophical limitation: every model draws its
-boundaries in the original feature space. KNN computes distances over the 16 raw
-features; SVM finds hyperplanes in that same space; trees split along individual feature
-axes. A **multilayer perceptron (MLP)** does something categorically different: it learns
-a sequence of non-linear transformations that progressively re-represent the input until
-the final layer can separate the classes with a simple linear read-out. Rather than
-working directly with MajorAxisLength or ShapeFactor1, the hidden layers discover their
-own internal features, combinations and non-linear functions of the raw measurements
-that are most useful for the task.
+An MLP learns nonlinear feature transformations. RBF SVMs also use nonlinear representations through their kernel; the distinction is that the MLP learns successive explicit hidden layers.
 
 The question is whether this additional representational power translates into a
 measurable accuracy gain on this dataset, and, if not, what that tells us about the
@@ -1232,8 +1126,8 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
 # Same split as every other section
-X_raw = dry_bean.data.features
-y_raw = dry_bean.data.targets['Class']
+X_raw = X_clean
+y_raw = y_clean
 
 X_train, X_test, y_train_str, y_test_str = train_test_split(
     X_raw, y_raw, test_size=0.2, random_state=SEED, stratify=y_raw)
@@ -1295,10 +1189,10 @@ print(f"\nBest architecture : {best_name}  ({arch_accs[best_idx]:.4f})")
 
 ```{python}
 #| label: fig-nn-arch-sweep
-#| fig-cap: "Cross-validation accuracy and convergence epochs for each MLP architecture. The held-out test set is not used to choose the architecture."
+#| fig-cap: "Cross-validation accuracy and training epochs for each MLP architecture. The held-out test set is not used to choose the architecture."
 
 fig = make_subplots(1, 2, subplot_titles=['CV Accuracy by Architecture',
-                                           'Iterations to Convergence'])
+                                           'Training Epochs'])
 colors = PALETTE[:len(arch_names)]
 
 fig.add_trace(go.Bar(
@@ -1313,30 +1207,21 @@ fig.add_trace(go.Bar(
     hovertemplate='%{x}<br>Iters=%{y}<extra></extra>', showlegend=False
 ), row=1, col=2)
 
-fig.add_hline(y=max(arch_accs), line_dash='dot', line_color='#2ca02c',
-              annotation_text=f'Best: {max(arch_accs):.4f}',
-              annotation_position='bottom right',
-              annotation_font_color='#2ca02c', row=1, col=1)
+fig.add_hline(y=max(arch_accs), line_dash='dot', line_color='#2ca02c', row=1, col=1)
 
 fig.update_layout(
     title=dict(text='MLP Architecture Comparison', x=0.5, xanchor='center'),
     template='plotly_white', height=460,
     xaxis=dict(tickangle=-25),
     xaxis2=dict(tickangle=-25),
-    yaxis=dict(range=[0.905, 0.932], tickformat='.4f'),
-    yaxis2=dict(range=[0, 100]),
+    yaxis=dict(tickformat='.4f'),
+    yaxis2=dict(rangemode='tozero'),
     margin=dict(t=70, b=130)
 )
-fig.show()
+show_plot(fig)
 ```
 
-The sweep delivers a somewhat surprising result. The **Deeper (256-128-64-32)** model edges narrowly ahead, with the Shallow (64) model achieving nearly the same accuracy
-with far fewer parameters. No single configuration has a decisive advantage. Adding more
-layers and width beyond the Deeper setting does not help; the additional parameters are
-either redundant or slightly harmful with this amount of data (10,888 training samples and
-only 16 features). The Shallow model also needs the most iterations to converge (79),
-because its limited capacity forces the optimiser to work harder; deeper models converge
-faster but saturate at marginally lower accuracy.
+The CV-selected architecture is `{python} best_name`. Architecture scores and training epoch counts are printed above. Early stopping of a single seeded fit does not establish an intrinsic capacity limit.
 
 This is an important lesson: neural networks do not automatically outperform simpler
 models. When the input features are already well-engineered geometric descriptors and the
@@ -1363,19 +1248,13 @@ print(f"Test accuracy : {mlp_test_accuracy:.4f}\n")
 print(classification_report(y_test_str, y_pred_nn, target_names=CLASS_ORDER, digits=4))
 ```
 
-The per-class breakdown is now familiar in structure. **BOMBAY** remains perfect across
-every method in this notebook, with F1 1.0000. **HOROZ** and **SEKER** both clear 0.95 F1.
-The MLP's most notable improvement over the other methods is in overall accuracy
-and **DERMASON** recall. **SIRA** remains the hardest class: the confusion matrix shows
-47 SIRA beans mislabelled as DERMASON, compared to 50 for KNN and 53 for linear SVM.
-The non-linear representations learnt by the network bring incremental rather than
-transformative gains on the SIRA/DERMASON pair.
+The fitted MLP has test accuracy `{python} f"{mlp_test_accuracy:.4f}"`. Its per-class report and confusion matrix provide the observed error counts.
 
 ## Training Curve
 
 ```{python}
 #| label: fig-nn-training-curve
-#| fig-cap: "Training loss (cross-entropy) and validation accuracy over epochs for the best MLP. Early stopping triggers when validation accuracy stops improving; the model stops well before 400 epochs, preventing overfitting. The validation accuracy plateaus near its maximum within the first 30 iterations."
+#| fig-cap: "Training loss and internal validation accuracy by epoch. Early stopping limits training but does not guarantee absence of overfitting."
 
 train_loss  = mlp_best.loss_curve_
 val_scores  = mlp_best.validation_scores_
@@ -1410,21 +1289,16 @@ fig.update_layout(
 fig.update_xaxes(title_text='Epoch')
 fig.update_yaxes(title_text='Loss', row=1, col=1)
 fig.update_yaxes(title_text='Accuracy', tickformat='.4f', row=1, col=2)
-fig.show()
+show_plot(fig)
 ```
 
-The training curve shows healthy convergence. The loss decreases smoothly and
-monotonically; there are no signs of instability or divergence. The validation accuracy
-rises quickly in the first 10-15 epochs, then levels off. Early stopping fires shortly
-after the plateau, avoiding unnecessary computation and preventing overfitting. The gap
-between the best validation score and the test accuracy is small,
-confirming that the early stopping criterion generalises well.
+The training and internal validation curves are displayed above. Early stopping limits continued fitting after a validation plateau, but does not guarantee monotone loss or absence of overfitting.
 
 ## Final Confusion Matrix
 
 ```{python}
 #| label: fig-nn-cm
-#| fig-cap: "Normalised confusion matrix for the best MLP (256-128-64-32). The SIRA/DERMASON leakage stands at 47 counts (versus 50 for KNN and 53 for linear SVM), a modest but consistent improvement in SIRA recall. DERMASON-to-SIRA leakage is 43 counts. BOMBAY remains perfectly classified."
+#| fig-cap: "Held-out row-normalized confusion matrix for the CV-selected MLP architecture."
 
 cm_nn  = confusion_matrix(y_test_str, y_pred_nn, labels=CLASS_ORDER)
 cm_n   = cm_nn.astype(float) / cm_nn.sum(axis=1, keepdims=True)
@@ -1452,7 +1326,7 @@ fig.update_layout(
     height=520, yaxis_autorange='reversed',
     margin=dict(t=60)
 )
-fig.show()
+show_plot(fig)
 ```
 
 ## Final Comparison: All Methods
@@ -1461,9 +1335,9 @@ fig.show()
 #| label: fig-final-comparison
 #| fig-cap: "Held-out test accuracy of all methods after hyperparameter selection on training-fold cross-validation. Regenerate this figure rather than using archived numerical output."
 
-methods = [f'Decision Tree\\n(d={best_depth})', f'KNN\\n(k={best_k})',
-           f'Random Forest\\n(n={best_n})', f'Linear SVM\\n(C={best_C_lin})',
-           f'RBF SVM\\n(C={best_C_rbf})', f'MLP\\n({best_name})']
+methods = [f'Decision Tree<br>(d={best_depth})', f'KNN<br>(k={best_k})',
+           f'Random Forest<br>(n={best_n})', f'Linear SVM<br>(C={best_C_lin})',
+           f'RBF SVM<br>(C={best_C_rbf})', f'MLP<br>({best_name})']
 accs    = [dt_test_accuracy, knn_test_accuracy, rf_test_accuracy,
            svm_lin_test_accuracy, svm_rbf_test_accuracy, mlp_test_accuracy]
 colors  = ['#c44e52','#4C72B0','#55A868','#8172B2','#937860','#64B5CD']
@@ -1481,7 +1355,7 @@ fig.update_layout(
     template='plotly_white', height=440,
     margin=dict(t=60, b=10)
 )
-fig.show()
+show_plot(fig)
 ```
 
 ```{python}
@@ -1507,28 +1381,15 @@ print(summary_df.to_string(index=False))
 
 ## Conclusions
 
-Five methods; one dataset; one persistent finding: the **SIRA/DERMASON overlap** is the
-ceiling for every classifier tested. The spread across all competitive methods spans only
-about 0.008 accuracy points, from KNN at 0.9207 to the MLP at 0.9284, telling us that
-the bottleneck is in the data geometry, not in the choice of algorithm.
+Six fitted classifiers are compared on one held-out split after training-fold selection. The table gives their actual results. Similar error patterns do not establish the Bayes error rate or prove that no other model could improve.
 
-What does differ meaningfully is **what each model reveals about the problem**. The
-decision tree gives human-readable split rules; the SVM highlights that elongation ratios
-discriminate better than raw size; the random forest distributes importance across
-features and provides a free OOB estimate; the MLP achieves the highest accuracy by
-learning non-linear representations of the same 16 features. The next section goes one
-level deeper - using SHAP to decompose exactly which features drive individual
-predictions inside the Random Forest, and comparing those explanations against the
-impurity-based importance we already computed.
+The methods provide different forms of model description: tree rules, linear coefficients, impurity importances and learned nonlinear representations. The following section examines probability attributions for the selected forest.
 
 ---
 
 # SHAP: Explaining the Random Forest
 
-All five methods compared in this notebook give us an accuracy number and a confusion matrix.
-But *why* does the forest predict SIRA for a given bean? Which features push the prediction
-toward DERMASON and which ones hold it back? These are questions about the **internal
-reasoning of the model**, and they require a different kind of tool.
+All six classifiers yield accuracy and confusion summaries. The following probability attributions describe the fitted forest; they are not causal explanations of bean biology.
 
 In this section we apply **SHAP** (SHapley Additive exPlanations) to the Random Forest,
 decomposing each individual prediction into per-feature contributions grounded in
@@ -1583,11 +1444,11 @@ from sklearn.model_selection import train_test_split
 # Note: decision trees are scale-invariant, so no StandardScaler is applied here.
 
 SEED     = 42
-FEATURES = list(dry_bean.data.features.columns)   # 16 morphological feature names
+FEATURES = list(X.columns)   # 16 morphological feature names
 rng_shap = np.random.RandomState(SEED)
 
-X_raw_shap = dry_bean.data.features
-y_raw_shap = dry_bean.data.targets['Class']
+X_raw_shap = X_clean
+y_raw_shap = y_clean
 
 X_train_shap, X_test_shap, y_train_shap, y_test_shap = train_test_split(
     X_raw_shap, y_raw_shap,
@@ -1626,9 +1487,7 @@ section, confirming that SHAP explains the same CV-selected model and split.
 ## Computing SHAP Values
 
 We select a stratified subset of 70 test instances (10 per class) to explain. The background
-distribution, against which marginal contributions are measured, is a random sample of 50
-training instances. For each test instance we run $K = 50$ random permutations, giving us
-a tight approximation at very low computational cost.
+distribution is a random sample of 50 training instances. Each of 50 permutations uses a different background row, so baseline usage is balanced. Feature allocations remain Monte Carlo approximations; exact summation does not establish their precision.
 
 ```{python}
 #| label: shap-compute
@@ -1642,7 +1501,7 @@ bg_idx  = rng_shap.choice(len(X_train_shap), 50, replace=False)
 bg      = np.array(X_train_shap)[bg_idx]
 
 # Baseline: expected model output over the background
-baseline = rf_shap.predict_proba(bg).mean(axis=0)   # shape (N_CLS,)
+baseline = rf_shap.predict_proba(pd.DataFrame(bg, columns=FEATURES)).mean(axis=0)   # shape (N_CLS,)
 print("Baseline prediction (average over background):")
 for cls, p in zip(CLASS_ORDER, baseline):
     print(f"  {cls:10s}: {p:.4f}")
@@ -1669,7 +1528,9 @@ def shapley_permutation(model, x, background, K=50, rng=rng_shap):
 
     # Pre-generate all K permutations and background choices
     perms       = np.array([rng.permutation(M) for _ in range(K)])   # (K, M)
-    bg_choices  = rng.randint(0, B, size=K)
+    if K < 1 or B < 1:
+        raise ValueError("K and the background size must be positive")
+    bg_choices = np.resize(rng.permutation(B), K)
 
     # Build all K * (M+1) instances in one block, then call predict_proba once
     all_inst = np.zeros((K * (M + 1), M))
@@ -1682,7 +1543,7 @@ def shapley_permutation(model, x, background, K=50, rng=rng_shap):
             all_inst[k * (M + 1) + pos + 1] = cur
 
     # Single batched call to predict_proba
-    all_prob = model.predict_proba(all_inst).reshape(K, M + 1, n_cls)
+    all_prob = model.predict_proba(pd.DataFrame(all_inst, columns=FEATURES)).reshape(K, M + 1, n_cls)
 
     # Accumulate marginal contributions
     for k in range(K):
@@ -1717,22 +1578,20 @@ shap_vals = np.zeros((len(X_explain), M, N_CLS))   # (n_expl, M, N_CLS)
 for i, x in enumerate(X_explain):
     shap_vals[i] = shapley_permutation(rf_shap, x, bg, K=50)
 
+assert np.array_equal(rf_shap.predict(X_test_shap), rf_best.predict(X_test_shap))
+assert np.allclose(baseline + shap_vals.sum(axis=1),
+                   rf_shap.predict_proba(pd.DataFrame(X_explain, columns=FEATURES)), atol=1e-10)
 print("Done.  SHAP array shape:", shap_vals.shape)
 print(f"\nEfficiency check — instance 0  (true class: {ye_arr[0]})")
 ci0      = CLASS_ORDER.index(ye_arr[0])
-f_x0     = rf_shap.predict_proba(X_explain[0].reshape(1, -1))[0, ci0]
+f_x0     = rf_shap.predict_proba(pd.DataFrame(X_explain[0].reshape(1, -1), columns=FEATURES))[0, ci0]
 phi_sum0 = shap_vals[0, :, ci0].sum()
 print(f"  f(x)                     = {f_x0:.4f}")
 print(f"  baseline + Σφᵢ           = {baseline[ci0] + phi_sum0:.4f}")
-print(f"  |error|                  = {abs(f_x0 - baseline[ci0] - phi_sum0):.4f}  (approximation noise)")
+print(f"  |error|                  = {abs(f_x0 - baseline[ci0] - phi_sum0):.4f}  (numerical residual)")
 ```
 
-The efficiency check shows that the baseline (average prediction over the background) plus
-the sum of all 16 SHAP values closely reconstructs the model's actual predicted probability
-for that instance. The residual is purely the noise introduced by sampling $K=50$
-permutations rather than evaluating all $16!$ orderings; with $K=50$ this error is
-typically below **0.05 probability units**, which is more than adequate for interpretation
-purposes.
+Each path telescopes from a background prediction to the explained prediction. Since all 50 background rows are used once, the baseline plus all feature attributions reconstructs every explained output to numerical precision. This is asserted for all 70 instances and all classes. Per-feature Monte Carlo uncertainty remains.
 
 ## Global Feature Importance
 
@@ -1744,7 +1603,7 @@ it model-agnostic and applicable to any fitted predictor.
 
 ```{python}
 #| label: fig-shap-global
-#| fig-cap: "Global SHAP feature importance: mean |φᵢ| averaged over the 70 explained instances and all 7 classes. Features are ranked from most to least important. Perimeter and ShapeFactor1 lead by a clear margin; Extent and Solidity contribute almost nothing."
+#| fig-cap: "Mean absolute permutation Shapley attribution over 70 explained observations, equally sampled by true class, and all seven outputs. This is a class-balanced explanation summary."
 
 mean_abs_global = np.mean(np.abs(shap_vals), axis=(0, 2))   # (M,)
 feat_order      = np.argsort(mean_abs_global)                # ascending
@@ -1775,36 +1634,22 @@ fig.update_layout(
     height=520,
     margin=dict(l=140, t=60, b=50)
 )
-fig.show()
+show_plot(fig)
 ```
 
-The ranking reveals a clear two-tier structure. **Perimeter** tops the chart with a mean
-|SHAP| of **0.0339**, followed by **ShapeFactor1** (0.0308), **ShapeFactor3** (0.0283),
-and **MinorAxisLength** (0.0271). These four features drive the bulk of the model's
-discriminative signal.
+The bar chart ranks mean absolute attribution for this class-balanced sample of 70 test observations. The ranking depends on the fitted model, background distribution and explanation sample.
 
-A second tier comprises MajorAxisLength, Compactness, ConvexArea, and Area, each
-contributing roughly 0.023–0.026. The bottom of the ranking is equally informative:
-**Extent** (0.0031) and **Solidity** (0.0056) contribute almost nothing globally.
-This matches the biological intuition: bean grain images taken under controlled lighting
-have near-perfect convex outlines and consistent bounding-box alignment, so solidity and
-extent carry almost no discriminative information.
+Inspect the values in the chart before interpreting small rank differences; this run does not estimate attribution uncertainty.
 
-Compare this to the random forest's own **impurity-based feature importance**: ShapeFactor3
-(0.108) topped that ranking, whereas Perimeter ranked second (0.093). The discrepancy
-illustrates a well-known bias of impurity importance toward features with many split
-points; SHAP, by measuring actual output change, gives a less biased estimate.
+Impurity and Shapley importance measure different quantities. A disagreement alone does not demonstrate impurity bias or establish that either ranking is closer to causal relevance.
 
 ## Per-Class Feature Importance
 
-Global importance averages across all seven classes. But the forest may rely on very
-different features to identify, say, BOMBAY (the largest, most distinct bean) versus SIRA
-(the hardest to tell apart). The heatmap below shows, for each class, which features carry
-the most weight locally.
+Global importance averages across all seven probability outputs. The heatmap below separates those outputs and shows the mean absolute attribution of each feature over the explained sample.
 
 ```{python}
 #| label: fig-shap-heatmap
-#| fig-cap: "Per-class SHAP importance heatmap. Each cell is the mean |φᵢ| for feature i and class c, normalised by its row maximum so that colours are comparable across features of different absolute magnitudes. Warm cells indicate features that strongly push predictions toward or away from a given class."
+#| fig-cap: "Per-class SHAP importance heatmap. Each cell is the mean |φᵢ| for feature i and class c, normalised by its feature-row maximum. Colours compare the relative attribution to classes within a feature; annotations retain absolute magnitudes. Signs are not shown."
 
 mean_abs_cls = np.mean(np.abs(shap_vals), axis=0)   # (M, N_CLS)
 
@@ -1839,32 +1684,18 @@ fig.update_layout(
     height=560,
     margin=dict(l=150, t=100, b=50)
 )
-fig.show()
+show_plot(fig)
 ```
 
-The heatmap surfaces class-specific patterns invisible in the global bar chart:
+The heatmap averages absolute attribution to each output over all 70 explained instances. It is not restricted to observations whose true class matches that output.
 
-**BOMBAY** is uniquely identified by raw size features - Area (0.036) and ShapeFactor1
-(0.030) are its top contributors, reflecting the fact that Bombay beans are simply much
-larger than every other variety. The unusually large grain produces extreme values of
-composite indices; shape regularity features barely appear for BOMBAY at all: if a bean
-is large enough, its class identity is unambiguous regardless of outline shape.
+The class columns describe contributions to the model's probability outputs, not necessary or sufficient biological rules.
 
-**HOROZ** shows the opposite pattern. Its top features are ShapeFactor3 (0.048) and
-Compactness (0.043), with very little contribution from raw size features like Area.
-HOROZ beans are distinctive not because of their absolute size but because of the
-particular way their outline curves - they are elongated with a smooth, distinctive
-curvature captured by the shape regularity composites.
+Row normalization aids comparison but hides between-feature differences in absolute magnitude; numerical annotations retain the original values.
 
-**BARBUNYA** is strongly characterised by Roundness (0.048) and Perimeter (0.050). The
-combination of a relatively circular shape (high roundness) and a specific perimeter range
-distinguishes Barbunya from the more elongated varieties.
+Correlated measurements can redistribute attribution under different background choices.
 
-**DERMASON and SIRA** present the most uniform heatmap rows - many features contribute
-moderately for both classes, with no single dominant feature. This explains the persistent
-confusion between the two: no feature, alone or in combination, provides a clean decision
-boundary. The forest must rely on a diffuse vote across many features, and the resulting
-boundary is genuinely fuzzy.
+Diffuse attributions do not prove that no clean decision boundary exists.
 
 ## Local Explanations: Waterfall Decompositions
 
@@ -1872,22 +1703,15 @@ Global summaries tell us which features matter on average. Waterfall plots decom
 prediction for a **single instance** into signed per-feature contributions, showing
 exactly which features pushed the probability up or down relative to the baseline.
 
-We examine four instances: one from each of the four most informative classes - BOMBAY
-(easiest), SEKER, DERMASON, and SIRA (hardest).
+We examine four selected instances, one each from BOMBAY, SEKER, DERMASON and SIRA.
 
 ```{python}
 #| label: fig-shap-waterfalls
-#| fig-cap: "Waterfall decompositions for four individual predictions (4×1 layout). Each bar is the SHAP value φᵢ for the predicted class: positive (blue) means the feature increased the predicted probability relative to the baseline; negative (red) means it decreased it. E[f] (grey dotted) and f(x) (green dashed) are shown as vertical lines; their values appear in the subtitle of each panel."
+#| fig-cap: "Attributions to the true-class probability for one instance per selected class. The eight largest contributions plus an aggregate of the remaining features sum from the background mean to the prediction."
 
 from plotly.subplots import make_subplots
 
 TARGET_CLASSES  = ['BOMBAY', 'SEKER', 'DERMASON', 'SIRA']
-WATERFALL_DESC  = {
-    'BOMBAY'  : 'largest bean, size dominates',
-    'SEKER'   : 'compact & round, shape dominates',
-    'DERMASON': 'small & elongated, multi-feature push',
-    'SIRA'    : 'hard case, diffuse evidence',
-}
 
 bar_pos_color = '#4C72B0'
 bar_neg_color = '#c44e52'
@@ -1900,13 +1724,13 @@ for cls in TARGET_CLASSES:
     idx  = np.where(ye_arr == cls)[0][0]
     phi  = shap_vals[idx, :, ci]
     base = baseline[ci]
-    f_x  = rf_shap.predict_proba(X_explain[idx].reshape(1, -1))[0, ci]
+    f_x  = rf_shap.predict_proba(pd.DataFrame(X_explain[idx].reshape(1, -1), columns=FEATURES))[0, ci]
     order    = np.argsort(np.abs(phi))[::-1][:8]
-    phi_top  = phi[order]
-    feat_top = [FEATURES[i] for i in order]
+    phi_top = np.append(phi[order], phi.sum() - phi[order].sum())
+    feat_top = [FEATURES[i] for i in order] + ['Other 8 features']
     cls_data[cls] = dict(phi_top=phi_top, feat_top=feat_top, base=base, f_x=f_x)
     subplot_titles.append(
-        f"{cls} - {WATERFALL_DESC[cls]}  (E[f]={base:.2f}, f(x)={f_x:.2f})"
+        f"{cls}: E[f]={base:.2f}, f(x)={f_x:.2f}"
     )
 
 fig = make_subplots(
@@ -1932,16 +1756,9 @@ for row, cls in enumerate(TARGET_CLASSES, start=1):
         colors.append(bar_pos_color if v >= 0 else bar_neg_color)
         cumul += v
 
-    # Invisible base bars (waterfall stacking)
-    fig.add_trace(go.Bar(
-        x=bar_base, y=feat_top, orientation='h',
-        marker=dict(color='rgba(0,0,0,0)'),
-        showlegend=False, hoverinfo='skip'
-    ), row=row, col=1)
-
     # Visible delta bars with value labels inside
     fig.add_trace(go.Bar(
-        x=bar_x, y=feat_top, orientation='h',
+        x=bar_x, base=bar_base, y=feat_top, orientation='h',
         marker=dict(color=colors),
         text=[f"{v:+.2f}" for v in phi_top],
         textposition='inside', insidetextanchor='middle',
@@ -1955,9 +1772,9 @@ for row, cls in enumerate(TARGET_CLASSES, start=1):
     fig.add_vline(x=f_x,  line_dash='dash', line_color='#2ca02c', line_width=1.5, row=row, col=1)
 
 fig.update_layout(
-    title=dict(text='Waterfall Decompositions — Top 8 SHAP features per instance',
+    title=dict(text='Local Shapley Attributions: Top 8 and Remainder',
                x=0.5, xanchor='center'),
-    barmode='stack',
+    barmode='overlay',
     template='plotly_white',
     height=1300,
     margin=dict(t=60, b=50, l=160, r=60),
@@ -1965,42 +1782,18 @@ fig.update_layout(
 )
 fig.update_xaxes(title_text='Predicted probability (class in subtitle)',
                  tickformat='.2f', range=[0, 1.15])
-fig.show()
+show_plot(fig)
 ```
 
-The four waterfall plots tell four distinct stories:
+Each panel explains the probability assigned to its true class, which need not be the predicted class. The eight largest contributions and an aggregate of the remaining eight connect the background mean to the output.
 
-**BOMBAY** (panel 1) is an almost trivially easy prediction. The forest's baseline for
-BOMBAY is 0.06, well below its eventual predicted probability. Five size features - Area
-(+0.17), MinorAxisLength (+0.14), ShapeFactor1 (+0.13), EquivDiameter (+0.13) and
-Perimeter (+0.11) - each push the probability upward by more than 0.11 in a single
-step. By the time the top five features are accounted for the predicted probability has
-already cleared 0.70; the remaining features contribute only small incremental
-corrections. The final probability is **1.00**. The explanation is dominated by raw size:
-this bean is so large that the model is certain.
+A high forest probability is a model output, not guaranteed certainty or a calibrated frequency.
 
-**SEKER** (panel 2) reaches the same perfect confidence via a completely different
-route. The top contributing features are ShapeFactor3 (+0.16), Compactness (+0.12), and
-ShapeFactor4 (+0.09), all shape regularity composites. SEKER beans are notably compact
-and circular; the combination of a high ShapeFactor3 and Compactness places this bean in
-a region of the feature space with essentially no overlap from other varieties. Size
-features like Area barely move the needle: the identifying signal is geometric quality,
-not scale.
+Positive bars increase the class probability relative to the background; negative bars decrease it.
 
-**DERMASON** (panel 3) showcases how the forest reaches certainty via a collective
-vote rather than one dominant feature. ConvexArea (+0.17), Perimeter (+0.11),
-Area (+0.11) and ShapeFactor1 (+0.11) all push in the same direction, but no single
-feature dominates. This diffuse evidence pattern is characteristic of DERMASON: the
-variety is identified by the coordinated signal from multiple size-and-elongation
-features, each individually ambiguous but jointly decisive.
+Attributions describe the selected observation and should not be generalized to every grain of that variety.
 
-**SIRA** (panel 4) is particularly instructive. The prediction is P = 1.00 for
-this specific instance, but the feature profile is telling: Perimeter (+0.14), Roundness
-(+0.10), ShapeFactor3 (+0.10) and Area (+0.09) are the main drivers - features
-that overlap heavily with the DERMASON profile. This explains why the two classes confuse
-each other so persistently on harder borderline instances. This "easy" SIRA bean sits far
-from the boundary; on marginal cases the positive SHAP contributions would be much
-smaller and a DERMASON misclassification more likely.
+The explanation is conditional on the chosen model, features and background. It does not establish why a future observation would be misclassified.
 
 ## SHAP vs. Random Forest Impurity Importance
 
@@ -2011,7 +1804,7 @@ model-agnostic alternative. How do the two rankings compare?
 
 ```{python}
 #| label: fig-shap-vs-rf
-#| fig-cap: "SHAP global importance vs Random Forest impurity importance, sorted by SHAP rank. Bars that are tall in both plots signal features both methods agree on; divergences reveal the impurity bias. The most notable disagreement is ShapeFactor3: it tops the impurity ranking (0.108) but ranks only 3rd by SHAP (0.0283), suggesting its many splits in shallow tree nodes inflate impurity importance without a commensurate effect on predicted probabilities."
+#| fig-cap: "Permutation Shapley and impurity importance, normalized separately by their maxima. A ranking difference alone does not identify its cause or prove bias."
 
 rf_importances = rf_shap.feature_importances_   # (M,)
 shap_global    = np.mean(np.abs(shap_vals), axis=(0, 2))
@@ -2046,7 +1839,7 @@ fig.add_trace(go.Bar(
 
 fig.update_layout(
     title=dict(
-        text='SHAP Global Importance vs. RF Impurity Importance (normalised, sorted by SHAP)',
+        text='Normalized Importances: Shapley and Forest Impurity',
         x=0.5, xanchor='center'
     ),
     barmode='group',
@@ -2057,7 +1850,7 @@ fig.update_layout(
     height=460,
     margin=dict(t=70, b=120)
 )
-fig.show()
+show_plot(fig)
 ```
 
 ```{python}
@@ -2080,67 +1873,25 @@ rank_df = pd.DataFrame({
 print(rank_df.to_string(index=False))
 ```
 
-The rank-comparison table confirms three patterns:
+The table shows agreement and disagreement between the two model-specific rankings.
 
-**Strong agreement on the top predictors.** Perimeter (SHAP: 1st, RF: 2nd),
-ShapeFactor1 (SHAP: 2nd, RF: 4th), and MinorAxisLength (SHAP: 4th, RF: 5th) sit near
-the top of both rankings. These features capture distinct aspects of bean geometry and
-their effect on the model output is large regardless of how importance is measured.
+Agreement suggests similar emphasis in this fitted forest, but does not validate the features as causal drivers.
 
-**ShapeFactor3 is the most inflated by impurity importance.** It ranks 1st by impurity
-(0.108) but only 3rd by SHAP (0.0283), a gap of two positions. This is the canonical
-impurity-bias artefact: ShapeFactor3 is used in many shallow splits across the 200 trees
-(driving high cumulative impurity decrease), but its per-instance marginal effect on the
-predicted probabilities is more moderate. Compactness shows the same pattern: it ranks
-3rd by impurity yet only 6th by SHAP. SHAP is not fooled by split frequency.
+Rank differences alone do not establish inflation or identify its mechanism.
 
-**Eccentricity and AspectRatio are overrated by impurity.** Both rank higher by RF
-impurity than by SHAP (Eccentricity: RF 9th vs SHAP 13th; AspectRatio: RF 11th vs SHAP
-14th). These features are correlated with elongation composites like ShapeFactor1, so the
-forest's impurity accumulates across the correlated group — their many threshold splits
-produce a large cumulative Gini decrease, inflating their impurity rank. SHAP, by measuring
-the actual marginal change in predicted probabilities through permutation, partially
-corrects for this and assigns them a more modest position.
+Feature correlations and the background distribution affect the interpretation of Shapley values as well as impurity importance.
 
-**Extent and Solidity** sit at the bottom of both rankings, consistent with the earlier
-finding that controlled image acquisition makes these features near-constant across
-classes.
+Small contributions apply to this fitted model and explanation sample; they do not prove irrelevance in other populations.
 
 ## Conclusions
 
 This notebook set out to ask a simple question: what can a computer learn from the shape
 of a bean? Six methods and one dataset later, the answer is clear, and so are the limits.
 
-**On accuracy**, all competitive methods cluster in a narrow band. KNN (0.9207),
-Random Forest (0.9221), Linear SVM (0.9232), RBF SVM (0.9262) and MLP (0.9284) are
-separated by less than 0.009 accuracy points. No single algorithm breaks through.
-The bottleneck is not the model - it is the data: **SIRA and DERMASON** overlap enough
-in axis lengths, perimeter and shape factors that no classifier, however powerful, cleanly
-separates them. The single decision tree (0.9056) is the one genuine outlier, its
-high-variance structure unsuitable for 16-dimensional curved boundaries.
+**On accuracy**, use the computed summary table for the six selected classifiers. This single split does not establish an irreducible error ceiling or a statistically significant winner.
 
-**On interpretability**, the methods tell very different stories. The decision tree is the
-only one that exposes a human-readable rule set: the root split on MajorAxisLength at
-~281 units, followed by ShapeFactor1 and ShapeFactor3, is immediately useful to an
-agricultural engineer. The linear SVM surfaces elongation ratios (ShapeFactor1,
-AspectRatio, Eccentricity) as the most discriminative features - more so than raw size.
-The random forest spreads importance evenly and adds a free OOB estimate. The MLP learns
-non-linear representations of the same 16 features, achieving the highest accuracy at the
-cost of full opacity.
+**On interpretability**, tree rules, linear coefficients and forest attributions describe different aspects of fitted models. Their rankings are not interchangeable.
 
-**SHAP bridges the gap.** Applied to the random forest, it shows that the model's
-classification strategy is genuinely heterogeneous across varieties: BOMBAY is identified
-purely by scale (Area, EquivDiameter, ShapeFactor1), SEKER and HOROZ by shape regularity
-composites (ShapeFactor3, Compactness), and DERMASON by a diffuse collective vote across
-many elongation and size features. SIRA, the persistent problem class, has no dominant
-discriminating feature - its SHAP explanations are spread across the same features that
-identify DERMASON, which is precisely why the two classes bleed into each other.
+**Shapley attribution** decomposes the selected forest's probability outputs relative to an empirical background. The implementation verifies additivity; approximate feature allocations and correlation-sensitive marginalization remain limitations.
 
-For a deployed bean-grading system, the practical recommendation is the **MLP** or **RBF
-SVM**: both achieve the highest accuracy (0.9284 and 0.9262), train quickly, and avoid
-the inference cost of KNN's nearest-neighbour search. The MLP has a slight accuracy edge;
-the RBF SVM is simpler and marginally more interpretable. If interpretability matters to
-stakeholders - traceability for regulatory audits, or design guidance for a sensor system
-— the SHAP analysis of the random forest offers the richest picture: it tells you not just
-*that* Perimeter and ShapeFactor1 are the most important features globally, but *why* each
-individual prediction was made, class by class, bean by bean.
+A deployment choice would require independent data from the intended imaging setup, uncertainty assessment, calibration, latency measurements and a decision about the costs of different mistakes. These experiments support a comparative study on this dataset, not an unconditional deployment recommendation.
