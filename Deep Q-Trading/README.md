@@ -1,18 +1,16 @@
 # Deep Q-Trading: Algorithmic Speculation via Reinforcement Learning
 
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md) · [Notebook](notebook.ipynb)
+
 ## Overview
 
-This project explores the application of **Deep Reinforcement Learning (DRL)** to financial markets, specifically Bitcoin (BTC/USD) trading. Unlike traditional algorithmic trading strategies that rely on hard-coded heuristics (e.g., "buy if RSI < 30"), this project trains a DQN policy by interacting with a simplified historical trading environment. Optimality is not established.
+This project trains a **Deep Q-Network (DQN)** policy in a simplified historical Bitcoin (BTC/USD) trading environment and evaluates it on a later chronological interval.
 
-Using the **Deep Q-Network (DQN)** architecture, the project explores a
-non-stationary cryptocurrency environment. It is a research prototype, not an
-investment strategy or evidence of outperformance.
+The experiment examines learning under changing price dynamics. It is a research prototype; its held-out results show substantial losses and underperformance relative to buy-and-hold.
 
 ## The Challenge: Non-Stationarity
 
-Financial markets represent a higher order of complexity compared to physical control problems (like Inverted Pendulum or LunarLander).
-* **Physics is constant:** Gravity does not change from one episode to the next.
-* **Markets are chaotic:** The statistical properties of financial data (mean, variance) shift over time. A strategy that is profitable in a bull market may be disastrous in a bear market.
+Return distributions and market conditions can change between training and evaluation. The chronological split tests one such change in this dataset; repeated periods and training seeds would be needed to assess robustness.
 
 **Objective:** Evaluate a learned policy on a later chronological BTC/USD interval.
 
@@ -23,8 +21,8 @@ Financial markets represent a higher order of complexity compared to physical co
 * **Action Space:** Discrete `{Short, Long}`.
 * **Observation Space:** A rolling window of the last 30 days.
 * **Feature Engineering:** The raw price data is augmented with technical indicators to provide context to the neural network:
-    * **RSI (Relative Strength Index):** To detect overbought/oversold conditions.
-    * **MACD (Moving Average Convergence Divergence):** To identify momentum changes.
+    * **RSI (Relative Strength Index):** Summarizes recent upward and downward price changes.
+    * **MACD (Moving Average Convergence Divergence):** Summarizes the difference between fast and slow exponential moving averages.
 
 ### 2. The Model: Deep Q-Network (DQN)
 We utilize a value-based method where a Neural Network approximates the Q-Function $Q(s, a)$, predicting the expected future reward of taking action $a$ in state $s$.
@@ -33,9 +31,9 @@ We utilize a value-based method where a Neural Network approximates the Q-Functi
 * **Optimization:** Adam Optimizer with Huber Loss (Smooth L1).
 * **Stabilization Mechanisms:**
     * **Experience Replay Buffer:** Stores 10,000 past transitions to break temporal correlations in training data.
-    * **Target Network:** A frozen copy of the weights is used to calculate target Q-values, preventing oscillation during learning.
+    * **Target Network:** A frozen copy of the weights is used to calculate target Q-values, reducing changes in the training target between target-network updates.
 
-### 3. Validation Strategy (The "Time-Travel" Test)
+### 3. Chronological Validation
 The dataset is split chronologically, and feature scaling is fitted on training observations. This addresses look-ahead in preprocessing; it does not guarantee generalization:
 * **Training Set (In-Sample):** 2015 – 2020. The agent learns from this historical data.
 * **Testing Set (Out-of-Sample):** 2021–2023. The 30-day lookback makes the scored price interval 31 January 2021 through 31 December 2023.

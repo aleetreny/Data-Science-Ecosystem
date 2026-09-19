@@ -1,13 +1,13 @@
 # Project Genesis: Deep Convolutional GAN (DCGAN)
 
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md) · [Notebook](notebook.ipynb)
+
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-orange)
 
-> **"We are not teaching a machine to analyze; we are teaching it to create."**
-
 ## Overview
 
-**Project Genesis** explores the frontier of **Generative Artificial Intelligence**. Unlike traditional classifiers that label data (e.g., "This is a 7"), this project builds an autonomous agent capable of "dreaming" handwritten digits from pure random noise.
+**Project Genesis** trains a convolutional generator to produce MNIST-like handwritten digits from random latent vectors.
 
 Using a **Deep Convolutional Generative Adversarial Network (DCGAN)**, we train two competing neural networks with binary cross entropy and a non-saturating generator objective. The system can produce synthetic MNIST-like images; visual samples alone do not demonstrate indistinguishability, generalization, or convergence to a Nash equilibrium.
 
@@ -54,4 +54,4 @@ Latent interpolation is a qualitative diagnostic. A smooth sequence is not, by i
 
 ## Running
 
-Use the shared [Python environment](../RUNNING.md). Run all cells in `notebook.ipynb`; the first run downloads MNIST through torchvision. The checked run used all 60,000 training images, five epochs and batches of 64.
+Use the shared [Python environment](../RUNNING.md). Run all cells in [notebook.ipynb](notebook.ipynb); the first run downloads MNIST through torchvision. The checked run used all 60,000 training images, five epochs and batches of 64.

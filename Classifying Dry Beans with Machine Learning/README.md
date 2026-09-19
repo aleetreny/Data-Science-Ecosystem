@@ -1,5 +1,7 @@
 # Classifying Dry Beans with Machine Learning
 
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md) · [Report source](notebook.qmd)
+
 A comparative study of KNN, SVM, Decision Trees, Random Forests, and Neural Networks on the [UCI Dry Bean Dataset](https://archive.ics.uci.edu/dataset/602/dry+bean+dataset).
 
 ------------------------------------------------------------------------

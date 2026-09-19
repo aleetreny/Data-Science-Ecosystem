@@ -1,5 +1,7 @@
 # Kepler KOI: Mixed-Type MDS and Clustering Analysis
 
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md) · [R script](Code.r)
+
 This exploratory analysis combines numeric, binary and categorical Kepler KOI descriptors, constructs a joint dissimilarity and examines low-dimensional projections and clusters. It does not identify new planets or establish separation of physical signal from noise.
 
 ## Data and workflow

@@ -1,4 +1,6 @@
-# The Silicon Neuron: Extreme-Scale Anomaly Detection on FPGAs
+# The Silicon Neuron: Anomaly Detection and Weight Quantization
+
+[Portfolio](../../README.md) · [Execution guide](../../RUNNING.md) · [Notebook](notebook.ipynb)
 
 ![Python](https://img.shields.io/badge/python-3.12-blue) ![TensorFlow](https://img.shields.io/badge/tensorflow-2.16%2B-orange) ![Status](https://img.shields.io/badge/status-research_prototype-blue)
 
@@ -38,9 +40,9 @@ The notebook uses a deliberately simplified simulated sample:
 -   **Architecture:** Compressive bottleneck ($150 \to 8$ dimensions).
 -   **Objective:** Minimize Mean Squared Error (MSE) on background events.
 
-### 3. Custom Quantization Engine (The Core Innovation)
+### 3. Custom Quantization Layer
 
-Standard libraries (like QKeras) often face compatibility issues with modern TensorFlow. I implemented a custom **`QuantizedDense` Layer** from first principles using the **Straight-Through Estimator (STE)**. 
+The custom **`QuantizedDense` layer** implements weight and bias quantization in TensorFlow using a **straight-through estimator (STE)**.
 * **Precision:** Six-bit weights/biases in hidden layers and eight-bit weights/biases in the output layer.
 * **Range:** Six-bit integer codes are clipped to $[-32,31]$ and divided by 32; the final layer uses $[-128,127]/128$.
 * **Scope:** Rounding uses a straight-through gradient estimator. Activations, accumulation and training remain floating point; TensorFlow is required.
@@ -59,9 +61,9 @@ The executed held-out toy-data evaluation gives baseline **AUC 0.9619** and weig
 
 ------------------------------------------------------------------------
 
-## Future Roadmap (CERN)
+## Further validation
 
-If integrated into the CERN computing infrastructure, the following steps are proposed: 
+Possible extensions, each requiring separate evaluation:
 1. **Hardware-in-the-Loop:** Compile and synthesize the exported design for a named target, then record timing, DSP/BRAM/LUT use, power and numerical equivalence.
 2. **Pruning:** Evaluate pruning and measure its actual resource and accuracy effects.
 3. **Graph Neural Networks:** Adapt the quantization engine for GNNs to better capture the non-Euclidean geometry of particle detectors.

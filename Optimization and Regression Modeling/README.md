@@ -1,18 +1,20 @@
 # Optimization and Regression Modelling
 
-## Repository Overview
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md)
 
-This repository contains a collection of advanced optimization and data analysis projects, developed as part of the Optimization and Decision Analytics coursework for the Master on Statistics for Data Science at UC3M.
+## Overview
 
-The projects serve as practical, hands-on applications of mathematical optimization techniques, demonstrating how to model and solve complex problems using Python and the Gurobi Optimizer. The repository is divided into two main areas:
+These projects were developed for Optimization and Decision Analytics coursework in the Master's in Statistics for Data Science at UC3M.
+
+The projects serve as practical, hands-on applications of mathematical optimization techniques, demonstrating how to model and solve complex problems using Python and the Gurobi Optimizer. The project is divided into two main areas:
 
 - **Linear Programming (LP):** Explores classic LP problems, including resource allocation and a formulation of a regression problem (Mean Absolute Error) as a linear program.
 - **Mixed Integer Linear Programming (MILP):** Tackles a more complex production planning problem involving fixed costs, logical constraints, and piecewise linear profit functions, which require integer and binary variables to model.
 
-## Repository Structure
+## Project Structure
 
 ```
-Optimization-and-Regression-Modelling/
+Optimization and Regression Modeling/
 ├── README.md                 <-- (You are here)
 │
 ├── Linear Programming/
@@ -22,6 +24,7 @@ Optimization-and-Regression-Modelling/
 └── Mixed Integer Linear Programming/
     ├── Problem Statement 2.pdf   <-- (Academic prompt for the MILP problem)
     ├── Jupyter_resolution_report.ipynb <-- (Gurobi-Python model, data analysis, & plotting)
+    ├── report-format.yml         <-- (PDF rendering settings)
     └── Report.pdf                <-- (Formal write-up with managerial insights)
 ```
 
@@ -29,7 +32,7 @@ Optimization-and-Regression-Modelling/
 
 ## Project 1: Linear Programming & MAE Regression
 
-**Folder:** Linear Programming/
+**Folder:** [Linear Programming](Linear%20Programming/)
 
 This project folder contains the solution to a two-part problem set, both solved using Linear Programming techniques.
 
@@ -59,7 +62,7 @@ This project folder contains the solution to a two-part problem set, both solved
 
 **Model (The "LP" Twist):** Instead of using a traditional Ordinary Least Squares (OLS) approach (which minimizes the sum of squared errors), this problem is solved using the **Mean Absolute Error (MAE)** criterion.
 
-**Approach:** 
+**Approach:**
 - Minimize the sum of absolute deviations between predicted and actual values
 - Introduce non-negative continuous positive/negative deviation variables
 - Reformulate the absolute value objective as a linear function
@@ -79,9 +82,9 @@ This project folder contains the solution to a two-part problem set, both solved
 
 ## Project 2: Production Planning (MILP)
 
-**Folder:** Mixed Integer Linear Programming/
+**Folder:** [Mixed Integer Linear Programming](Mixed%20Integer%20Linear%20Programming/)
 
-This project addresses a complex, real-world production planning scenario for a company manufacturing three discrete products. The problem requires a Mixed Integer Linear Programming (MILP) model due to its business rules.
+This project addresses an academic production planning scenario for a company manufacturing three discrete products. The problem requires a Mixed Integer Linear Programming (MILP) model due to its business rules.
 
 **Problem:** Determine the optimal production quantity for three products to maximize total profit, subject to constraints on four resources, production capacity limits, and complex business rules.
 
@@ -187,6 +190,6 @@ preserved as supplied.
 
 ---
 
-## Disclaimer
+## Source material
 
-This repository contains academic project work. The problem statements and data are provided by the course instructors at UC3M.
+This folder contains academic project work. The problem statements and data are provided by the course instructors at UC3M.

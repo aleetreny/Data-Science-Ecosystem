@@ -1,8 +1,10 @@
 # Statistical and Strategic Analysis of Monopoly (Madrid Ed.)
 
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md) · [R script](Monopoly.R)
+
 > A study of game probability and economics using Monte Carlo simulations in R.
 
-![R](https://img.shields.io/badge/R-4.0%2B-blue)
+![R](https://img.shields.io/badge/R-4.5.3-blue)
 ![Tidyverse](https://img.shields.io/badge/Main_Lib-Tidyverse-orange)
 ![Status](https://img.shields.io/badge/Status-Exploratory-blue)
 
@@ -16,7 +18,7 @@ cash-flow study rather than a full multiplayer Monopoly simulator.
 
 ## Key Findings
 
-The data yielded by the simulation reveals clear patterns:
+The simulations examine:
 
 1.  **Landing frequencies:** The simulation estimates visit frequencies under
     the documented ruleset; results depend on the rules and random seed.
@@ -40,15 +42,13 @@ The `Monopoly.R` script generates a series of plots to visualize these findings:
 
 ## Technical Requirements
 
-The project is developed in **R**. You will need the following packages installed:
+Use the [shared R environment](../RUNNING.md), including `tidyverse`. From this project directory, run:
 
-*   `tidyverse` (for data manipulation and plotting with ggplot2).
-*   `parallel` (optional, if you wish to parallelize the simulation).
-
-Quick installation:
-```r
-install.packages("tidyverse")
+```bash
+Rscript Monopoly.R
 ```
+
+The board parameters are defined in the script; no external dataset is required.
 
 ## Simulated rules and economic assumptions
 

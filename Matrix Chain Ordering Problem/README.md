@@ -1,6 +1,8 @@
 # The Matrix Chain Ordering Problem
 
-This repository contains the deliverable for the High-Performance Computing challenge on the **matrix chain ordering problem**. The main artifact is a Quarto report, [notebook.qmd](notebook.qmd), which combines R, RcppArmadillo, benchmarks, plots, discussion, and references.
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md) · [Report source](notebook.qmd)
+
+This project contains the deliverable for the High-Performance Computing challenge on the **matrix chain ordering problem**. The main artifact is a Quarto report, [notebook.qmd](notebook.qmd), which combines R, RcppArmadillo, benchmarks, plots, discussion, and references.
 
 Quick links:
 
@@ -28,9 +30,9 @@ The report covers the four tasks from the assignment:
 └── notebook.html
 ```
 
-## Reproducible execution with Docker
+## Docker build recipe
 
-Docker is the recommended way to run the project if you want the an R/Quarto environment with an OpenMP-capable C++ compiler.
+The Dockerfile provides an optional R/Quarto build recipe with OpenMP compiler flags. The audit used the [shared local R environment](../RUNNING.md) with OpenMP active; this container image was not built during that review.
 
 What the container pins:
 
@@ -47,8 +49,7 @@ What Docker does **not** fully pin:
 
 Docker provides a common build recipe, not a fully locked software stack. Dependency versions and benchmark numbers can change between builds.
 
-The repository already includes a committed [notebook.html](notebook.html) for convenient viewing on GitHub, while Docker lets you regenerate it from scratch.
-It is also the recommended path for the Task 4 parallel benchmarks, because the container explicitly enables OpenMP during compilation.
+Download the committed [notebook.html](notebook.html) and open it locally to read the interactive report. The commands below build an environment and regenerate that report; check the notebook output to confirm whether OpenMP is active.
 
 ### Build the image
 
@@ -73,11 +74,12 @@ output/notebook.html
 
 ### Rebuild only when needed
 
-You only need to rebuild the image if you change:
+Rebuild the image after changing:
 
 - `Dockerfile`
 - the list of R dependencies
 - the Quarto version
+- the notebook source copied into the image
 
 The image copies the notebook at build time, so rebuild it after changing the source, or bind-mount the project when running it.
 
@@ -98,7 +100,7 @@ This is useful if you want to explore the parallel Task 4 implementation under d
 
 If you prefer to run everything directly on your machine, you need:
 
-- R `>= 4.5.0`
+- R (the local audit used `4.5.3`)
 - Quarto CLI
 - A C++17 compiler
 - These R packages:
@@ -118,12 +120,12 @@ Then render with:
 quarto render notebook.qmd --to html
 ```
 
-If your local compiler is not configured with OpenMP, the notebook still renders and the wavefront DP remains correct, but the parallel section will fall back to sequential execution. Docker avoids that ambiguity.
+If your local compiler is not configured with OpenMP, the notebook still renders and the wavefront DP remains correct, but the parallel section will fall back to sequential execution. Check the reported OpenMP status before interpreting a timing as a parallel benchmark.
 
 ## Expected takeaway
 
-The central conclusion of the project is stable even when the exact timings vary by machine:
+The examples illustrate three points; their exact timing gains depend on matrix dimensions, hardware and numerical libraries:
 
-- Choosing a good multiplication order matters far more than switching from R to C++ while keeping a bad order.
+- Choosing a good multiplication order can save far more work than switching from R to C++ while keeping a bad order.
 - A generic execution engine can preserve that gain without sacrificing flexibility.
-- Dynamic programming makes the optimization step cheap enough to automate.
+- Dynamic programming automates the choice of order for the stated cost model.

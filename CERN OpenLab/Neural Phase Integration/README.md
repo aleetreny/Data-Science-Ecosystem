@@ -1,4 +1,6 @@
-# Accelerating Phase Space Integration via Bijective Normalizing Flows
+# Neural Importance Sampling with Bijective Normalizing Flows
+
+[Portfolio](../../README.md) · [Execution guide](../../RUNNING.md) · [Notebook](notebook.ipynb)
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue) ![PyTorch](https://img.shields.io/badge/Framework-PyTorch-orange) ![Math](https://img.shields.io/badge/Domain-Measure_Theory_%26_Integration-green) ![Status](https://img.shields.io/badge/status-prototype-blue)
 
@@ -24,7 +26,7 @@ The model utilizes the **Real Non-Volume Preserving (RealNVP)** architecture. By
 
 -   **Numerical checks:** Forward/inverse consistency, finite log densities, support of the proposal and independent integral evaluation. Affine log-scales are bounded to prevent overflow.
 
-## 3. Methodology: Overcoming Mode Collapse
+## 3. Methodology: Proposal Training and Mode Coverage
 
 A significant challenge in high-dimensional integration is **Mode Collapse**, where narrow resonances are ignored in favor of broad backgrounds.
 
@@ -40,9 +42,9 @@ The reported variance comparison excludes discovery and training costs. It is no
 
 ![Final target and defensive proposal projections; these are qualitative diagnostics.](result_comparison.png)
 
-## 5. Deployment & CERN Proposal
+## 5. Further validation
 
-If selected for a student position at CERN, I propose to integrate these Bijective Flows into the **VegasFlow** framework to optimize real Standard Model matrix elements, providing a scalable path toward sustainable event generation for the HL-LHC.
+A next experiment would compare this proposal with established integration methods on physical matrix elements, counting discovery and training costs as well as sampling time. Repeated runs would be needed to assess accuracy, interval coverage and end-to-end efficiency.
 
 ------------------------------------------------------------------------
 

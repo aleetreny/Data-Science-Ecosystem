@@ -1,5 +1,7 @@
 # Student Performance Analysis: Exploratory and Predictive Modeling
 
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md) · [PDF report](Student_Performance_Report.pdf)
+
 This project explores associations with final mathematics grades in the UCI Student Performance data and evaluates a decision tree for predicting whether a student passes (G3 >= 10). The observed model performs below the majority-class accuracy baseline and is not a validated early-warning system.
 
 ## Files and data

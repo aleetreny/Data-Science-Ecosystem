@@ -1,5 +1,7 @@
 # Spotify Audio Analytics: Evolution & Prediction
 
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md)
+
 Two separate studies explore playlist metadata and lyric-derived features,
 and predict release decades from a Spotify/Kaggle audio-feature snapshot.
 The EDA does not use Spotify audio features.
@@ -26,8 +28,8 @@ redistributed. To regenerate the three derived CSVs from your own copies:
 
 ```bash
 cd Music_evolution
-python -m nltk.downloader punkt_tab
-python scripts/recompute_metrics.py /path/to/original/snapshots
+../../.venv/bin/python -m nltk.downloader punkt_tab
+../../.venv/bin/python scripts/recompute_metrics.py /path/to/original/snapshots
 ```
 
 The source directory must contain the three same-named CSVs with a `Lyrics`
@@ -43,7 +45,7 @@ change; the checked results use the supplied snapshots.
 
 Run [Predict_decades/predict_decades.ipynb](Predict_decades/predict_decades.ipynb).
 Obtain `tracks.csv` from version 1 of the
-[Spotify Dataset 1921–2020, 600k+ Tracks](https://www.kaggle.com/datasets/yamaerenay/spotify-dataset-19212020-600k-tracks).
+[Spotify Dataset 1921–2020, 600k+ Tracks](https://www.kaggle.com/datasets/yamaerenay/spotify-dataset-19212020-600k-tracks/versions/1).
 Put it in `Predict_decades/data/`, or set `SPOTIFY_TRACKS_CSV` to its path.
 The source contains 586,672 tracks and 20 columns.
 

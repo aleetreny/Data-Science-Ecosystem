@@ -1,5 +1,7 @@
 # Hybrid Quantum Edge Classification for Particle Tracking
 
+[Portfolio](../../README.md) · [Execution guide](../../RUNNING.md) · [Notebook](notebook.ipynb)
+
 ![Python](https://img.shields.io/badge/Python-3.12-green) ![Framework](https://img.shields.io/badge/Framework-PyTorch_Geometric_%7C_PennyLane-orange) ![Dataset](https://img.shields.io/badge/Dataset-CERN_TrackML-lightgrey)
 
 ## 1. Project Context: The HL-LHC Data Challenge
@@ -22,8 +24,8 @@ We utilize the **TrackML Particle Tracking Challenge** dataset (Event 1000). To 
 
 The raw point cloud is converted into a directed graph $G=(V, E)$ based on physical constraints:
 
--   **Nodes (**$V$): Detector hits with features $(r, \phi, z)$.
--   **Edges (**$E$): Directed outward with $10 < \Delta r \leq 200$ mm, $|\Delta \phi / \Delta r| \leq 0.0008$ rad/mm and $|z_0| \leq 150$ mm. These are heuristic geometric cuts, not proof of momentum conservation.
+-   **Nodes** ($V$): Detector hits with features $(r, \phi, z)$.
+-   **Edges** ($E$): Directed outward with $10 < \Delta r \leq 200$ mm, $|\Delta \phi / \Delta r| \leq 0.0008$ rad/mm and $|z_0| \leq 150$ mm. These are heuristic geometric cuts, not proof of momentum conservation.
 -   **Graph Statistics:** The audited event sector has **5,370 nodes**, **397,982 candidate edges** and **4,150 positive edges** (1.04%). Edges sharing noise particle ID 0 are never labeled positive.
 
 ### 2.3 Hybrid Architecture
@@ -33,13 +35,13 @@ Variational Quantum Circuit (VQC). It does not yet implement message passing,
 so it is not presented as a graph neural network benchmark.
 
 1.  **Classical Encoder:** Projects geometric features into a latent space.
-2.  **Quantum Kernel:** A 4-qubit parameterized circuit using `StronglyEntanglingLayers` to capture non-linear correlations.
-3.  **Optimization:** Implements **Batch Normalization** to stabilize quantum gradients and a **Multi-Qubit Readout** strategy to mitigate the information bottleneck.
+2.  **Quantum Circuit:** A 4-qubit parameterized circuit using `StronglyEntanglingLayers` to capture non-linear correlations.
+3.  **Normalization and Readout:** Batch normalization and a bounded angle transformation prepare circuit inputs; four Pauli-Z expectation values feed the final classical classifier.
 
 ## 3. Results
 
 The notebook trains a classical edge classifier and a hybrid quantum edge
-classifier on one TrackML event. It now reports an edge-level held-out split,
+classifier on one TrackML event. It reports an edge-level held-out split,
 which prevents scoring the exact optimized edges but is still not an
 event-level generalisation metric. Edge batches are split before training-dependent edge normalization. Node normalization still uses the shared event nodes, and the models have different capacities and epoch budgets, so these numbers do not establish quantum advantage.
 
@@ -70,7 +72,7 @@ event-level generalisation metric. Edge batches are split before training-depend
 
 1.  Clone the repository.
 2.  Ensure the `train_100_events` folder is present in this project directory, or set `TRACKML_DATA_DIR` to its location. You can download the `train_sample.zip` from Kaggle: [TrackML Dataset](https://www.kaggle.com/c/trackml-particle-tracking-challenge/data).
-3.  Run the Jupyter Notebook `notebook.ipynb`.
+3.  Run all cells in [notebook.ipynb](notebook.ipynb) using the shared environment.
     -   **Step 1:** Loads and sectorizes the TrackML data.
     -   **Step 2:** Constructs the geometric graph.
     -   **Step 3:** Trains the Classical Benchmark.
@@ -86,7 +88,7 @@ Possible extensions, each requiring independent evaluation:
 
 ---
 
-**Author:** Alejandro Treny 
+**Author:** Alejandro Treny
 
 ## Input provenance
 

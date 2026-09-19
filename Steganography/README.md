@@ -1,6 +1,8 @@
-# Project: Visual Steganography
+# Visual Steganography
 
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md) · [Notebook](notebook.ipynb)
+
+![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![Technique](https://img.shields.io/badge/Technique-LSB_Injection-red)
 
 ## Overview
@@ -9,18 +11,18 @@
 
 Using **Least Significant Bit (LSB)** modification, the algorithm alters a host image's pixel data. The alteration may be visually subtle under the demonstration conditions, but it remains detectable and is fragile under recompression, resizing, cropping and other transformations.
 
-## The Science & Importance
-
-In the cybersecurity landscape, this technique represents a double-edged sword:
-
-This notebook is for studying the mechanics and limitations of LSB embedding. It is not a secure channel: use authenticated encryption for confidentiality and a purpose-built robust watermarking method when resistance to image transformations is required.
-
 ## Technical Implementation
 
 The tool operates on the binary level of **NumPy** arrays:
 
 * **Carrier Depth:** 8-bit per channel (Standard RGB).
-* **Injection Method:** 2-bit Replacement (Stealth Mode).
-    * The top 6 bits are preserved; each 8-bit channel changes by at most 3.
+* **Injection Method:** Configurable 1–8 bits per channel; the demonstration uses 2.
+    * At 2-bit depth, the top 6 carrier bits are preserved and each 8-bit channel changes by at most 3.
     * Each secret colour channel is quantized to 2 bits and grafted onto the carrier's noise floor.
 * **Artifacts:** May be visible depending on the images and payload; can also be detected by statistical and learned steganalysis methods.
+
+## Running and verification
+
+Use the [shared Python environment](../RUNNING.md) and execute [notebook.ipynb](notebook.ipynb). The loader reuses local PNG inputs or downloads the two example photographs into `data/`.
+
+Carrier and payload must be nonempty `uint8` RGB arrays of the same shape. Save the combined image as PNG to preserve its bits. The verification suite checks embedding and extraction at every depth from 1 to 8, including a save/reload round trip. Recovery preserves the retained payload bits; discarded lower bits cannot be reconstructed.

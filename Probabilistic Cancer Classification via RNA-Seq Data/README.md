@@ -1,6 +1,8 @@
 # Probabilistic Cancer Classification via RNA-Seq Data
 
-Open the complete [HTML report](index.html), generated from [notebook.qmd](notebook.qmd).
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md) · [Report source](notebook.qmd)
+
+Download the complete [HTML report](index.html) and open it locally for interactive tables and plots. Its source is [notebook.qmd](notebook.qmd).
 
 This exploratory study classifies five tumor labels from gene expression in the
 UCI TCGA Pan-Cancer snapshot: 801 samples, 20,531 genes, and the BRCA, KIRC,

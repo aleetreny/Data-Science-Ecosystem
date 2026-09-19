@@ -1,5 +1,7 @@
 # Stochastic Optimization of Control Policies via Neuroevolution
 
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md) · [Notebook](notebook.ipynb)
+
 **Author:** Alejandro Treny Ortega
 
 ## Overview
