@@ -1,0 +1,193 @@
+{
+  "audit_date": "2026-09-19",
+  "hash_algorithm": "SHA-256",
+  "files": [
+    {
+      "path": "PCA Kepler Dataset/df_koi.csv",
+      "sha256": "2b60174fcad5ace70e2ad4486a68fd6c103e16df765c4918409d9d22d06bb195",
+      "bytes": 9770306,
+      "versioned": true,
+      "source": "https://exoplanetarchive.ipac.caltech.edu/docs/API_kepcandidate_columns.html",
+      "provenance": "Original repository snapshot; the two copies are byte-identical. The original archive query date is not recorded.",
+      "columns": 153,
+      "rows": 8054
+    },
+    {
+      "path": "MDS and Clustering Kepler Dataset/df_koi.csv",
+      "sha256": "2b60174fcad5ace70e2ad4486a68fd6c103e16df765c4918409d9d22d06bb195",
+      "bytes": 9770306,
+      "versioned": true,
+      "source": "https://exoplanetarchive.ipac.caltech.edu/docs/API_kepcandidate_columns.html",
+      "provenance": "Original repository snapshot; the two copies are byte-identical. The original archive query date is not recorded.",
+      "columns": 153,
+      "rows": 8054
+    },
+    {
+      "path": "EDA and Decision Tree/student_data.csv",
+      "sha256": "e47f9ee225e1ee6e69b7564e6dac7123e80b8486677fe111f351964cef5dec80",
+      "bytes": 56993,
+      "versioned": true,
+      "source": "https://archive.ics.uci.edu/dataset/320/student+performance",
+      "provenance": "Original repository copy of the mathematics subset (395 observations); headers and values checked.",
+      "columns": 33,
+      "rows": 395,
+      "delimiter": ";"
+    },
+    {
+      "path": "Classifying Dry Beans with Machine Learning/data/dry_beans.csv",
+      "sha256": "1330e4ccc5c54a925e43daf60d1409ac62dad2a21de9a25213765bee4b655787",
+      "bytes": 2471169,
+      "versioned": false,
+      "source": "https://archive.ics.uci.edu/dataset/602/dry+bean+dataset",
+      "provenance": "Downloaded through ucimlrepo and cached as CSV; this hash identifies the serialized cache, not the upstream XLSX.",
+      "columns": 17,
+      "rows": 13611
+    },
+    {
+      "path": "Probabilistic Cancer Classification via RNA-Seq Data/data.csv",
+      "sha256": "e3e7eff51f4a5fe5f121fb183c09786c767c755ef10d1c7b3ce3c193a7082ca9",
+      "bytes": 206186150,
+      "versioned": false,
+      "source": "https://archive.ics.uci.edu/dataset/401/gene+expression+cancer+rna+seq",
+      "provenance": "Recovered local copy from the earlier RNA-Seq project; sample IDs checked against labels.",
+      "columns": 20532,
+      "rows": 801
+    },
+    {
+      "path": "Probabilistic Cancer Classification via RNA-Seq Data/labels.csv",
+      "sha256": "e1653ccf5a630deb3b953ccac5a8b331b89adc5433e5d2d3444c1fc01d79e7aa",
+      "bytes": 12713,
+      "versioned": false,
+      "source": "https://archive.ics.uci.edu/dataset/401/gene+expression+cancer+rna+seq",
+      "provenance": "Recovered local copy; 801 unique sample IDs match the expression matrix one-to-one.",
+      "columns": 2,
+      "rows": 801
+    },
+    {
+      "path": "Spotify EDA and Random Forest/Predict_decades/data/tracks.csv",
+      "sha256": "8a08c199bd93438783e915470ec3ea1142c1267f2da48b7d1315d2b9f5d39cf9",
+      "bytes": 111366271,
+      "versioned": false,
+      "source": "https://www.kaggle.com/datasets/yamaerenay/spotify-dataset-19212020-600k-tracks/versions/1",
+      "provenance": "Recovered local copy from the earlier Spotify project, attributed there to this dataset; 586672 rows and 20 columns. Hash records the recovered file.",
+      "columns": 20,
+      "rows": 586672
+    },
+    {
+      "path": "Spotify EDA and Random Forest/Music_evolution/dataset_music.csv",
+      "sha256": "7f19250373e46bd77e8b7bd24449485014779f76ae40a0f5bbb0ae4cbae8861d",
+      "bytes": 78577,
+      "versioned": true,
+      "source": null,
+      "provenance": "Derived playlist snapshot. Lyric metrics recomputed from locally recovered original same-named CSVs using scripts/recompute_metrics.py; raw lyrics are not redistributed. Playlist IDs and snapshot metadata are in the notebook.",
+      "columns": 13,
+      "rows": 800
+    },
+    {
+      "path": "Spotify EDA and Random Forest/Music_evolution/dataset_fixed.csv",
+      "sha256": "7ab418d9f5a09714fc90f60274eedcbe76574345a518c883b8e46b8ffbaacf5d",
+      "bytes": 44496,
+      "versioned": true,
+      "source": null,
+      "provenance": "Derived playlist snapshot. Lyric metrics recomputed from locally recovered original same-named CSVs using scripts/recompute_metrics.py; raw lyrics are not redistributed. Playlist IDs and snapshot metadata are in the notebook.",
+      "columns": 14,
+      "rows": 393
+    },
+    {
+      "path": "Spotify EDA and Random Forest/Music_evolution/dataset_final_completed.csv",
+      "sha256": "8b13122bb4e384d2fd1a52399ad1a0a0be8a48f2cedce8a12f2cb7277eadab28",
+      "bytes": 82939,
+      "versioned": true,
+      "source": null,
+      "provenance": "Derived playlist snapshot. Lyric metrics recomputed from locally recovered original same-named CSVs using scripts/recompute_metrics.py; raw lyrics are not redistributed. Playlist IDs and snapshot metadata are in the notebook.",
+      "columns": 14,
+      "rows": 789
+    },
+    {
+      "path": "CERN OpenLab/Quantum GNN Tracking/train_100_events/event000001000-hits.csv",
+      "sha256": "1db9de9816aa6af10f881606198b6b229775a6ba7b7fe167a2ab569570e1a200",
+      "bytes": 4586133,
+      "versioned": false,
+      "source": "https://raw.githubusercontent.com/derlin/hepqpr-qallse/8b43ac3b550b7cded7415fabb3cacf54302918f4/src/hepqpr/qallse/dsmaker/data/event000001000-hits.csv",
+      "provenance": "Downloaded from a pinned commit of the Qallse example data; event 1000.",
+      "columns": 7,
+      "rows": 120939
+    },
+    {
+      "path": "CERN OpenLab/Quantum GNN Tracking/train_100_events/event000001000-truth.csv",
+      "sha256": "1d73e9fb7f11ddfbc81ead02fb9c6019e84cc44272f7448b97e9a55bf83c32cd",
+      "bytes": 10333730,
+      "versioned": false,
+      "source": "https://raw.githubusercontent.com/derlin/hepqpr-qallse/8b43ac3b550b7cded7415fabb3cacf54302918f4/src/hepqpr/qallse/dsmaker/data/event000001000-truth.csv",
+      "provenance": "Downloaded from a pinned commit of the Qallse example data; event 1000.",
+      "columns": 9,
+      "rows": 120939
+    },
+    {
+      "path": "Independent Component Analysis/Melanoma.jpg",
+      "sha256": "5f5d9b8d69cbaef2cd5b0453e822d12d6ad233b337c8805991373e9e2d13940c",
+      "bytes": 43849,
+      "versioned": true,
+      "source": null,
+      "provenance": "Original repository image. No accession, acquisition information, clinical-label verification or source licence is recorded."
+    },
+    {
+      "path": "Deep Q-Trading/data/BTC-USD_2015-01-01_2024-01-01.csv",
+      "sha256": "6b13eba25990710d89b71f89856407c81ac40d46ce1afa3b1221beff0f3ba45a",
+      "bytes": 281893,
+      "versioned": false,
+      "source": "https://finance.yahoo.com/quote/BTC-USD/history/",
+      "provenance": "Cached yfinance daily OHLCV query for [2015-01-01, 2024-01-01). Provider revisions can change a new download.",
+      "columns": 6,
+      "rows": 3287
+    },
+    {
+      "path": "Generative Adversarial Networks/data/mnist/MNIST/raw/t10k-images-idx3-ubyte.gz",
+      "sha256": "8d422c7b0a1c1c79245a5bcf07fe86e33eeafee792b84584aec276f5a2dbc4e6",
+      "bytes": 1648877,
+      "versioned": false,
+      "source": "https://ossci-datasets.s3.amazonaws.com/mnist/t10k-images-idx3-ubyte.gz",
+      "provenance": "Downloaded by torchvision MNIST (which checks its own upstream MD5). Only the 60000-image training split is used by the GAN."
+    },
+    {
+      "path": "Generative Adversarial Networks/data/mnist/MNIST/raw/t10k-labels-idx1-ubyte.gz",
+      "sha256": "f7ae60f92e00ec6debd23a6088c31dbd2371eca3ffa0defaefb259924204aec6",
+      "bytes": 4542,
+      "versioned": false,
+      "source": "https://ossci-datasets.s3.amazonaws.com/mnist/t10k-labels-idx1-ubyte.gz",
+      "provenance": "Downloaded by torchvision MNIST (which checks its own upstream MD5). Only the 60000-image training split is used by the GAN."
+    },
+    {
+      "path": "Generative Adversarial Networks/data/mnist/MNIST/raw/train-images-idx3-ubyte.gz",
+      "sha256": "440fcabf73cc546fa21475e81ea370265605f56be210a4024d2ca8f203523609",
+      "bytes": 9912422,
+      "versioned": false,
+      "source": "https://ossci-datasets.s3.amazonaws.com/mnist/train-images-idx3-ubyte.gz",
+      "provenance": "Downloaded by torchvision MNIST (which checks its own upstream MD5). Only the 60000-image training split is used by the GAN."
+    },
+    {
+      "path": "Generative Adversarial Networks/data/mnist/MNIST/raw/train-labels-idx1-ubyte.gz",
+      "sha256": "3552534a0a558bbed6aed32b30c495cca23d567ec52cac8be1a0730e8010255c",
+      "bytes": 28881,
+      "versioned": false,
+      "source": "https://ossci-datasets.s3.amazonaws.com/mnist/train-labels-idx1-ubyte.gz",
+      "provenance": "Downloaded by torchvision MNIST (which checks its own upstream MD5). Only the 60000-image training split is used by the GAN."
+    },
+    {
+      "path": "Steganography/data/496ea29efbc967e4abec0b3f69546c00fabe79991d5265e8eca25d1ae705e72d.png",
+      "sha256": "026800f91f8f9684f469094ccb0816824bd52269bd6bedb7a187de4ea0122c74",
+      "bytes": 1105913,
+      "versioned": false,
+      "source": "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+      "provenance": "Downloaded image converted to RGB PNG by the notebook; hash identifies the local PNG cache."
+    },
+    {
+      "path": "Steganography/data/571fa8641af110c2d9d0056d863f0f3eef650c0ec6647f46d2190776b42ed1ba.png",
+      "sha256": "9fd002570c7fe5bd96a7891a38be1013a1fc5d6c0196e1cb5fe37876988b9280",
+      "bytes": 1072164,
+      "versioned": false,
+      "source": "https://images.unsplash.com/photo-1516259762381-22954d7d3ad2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+      "provenance": "Downloaded image converted to RGB PNG by the notebook; hash identifies the local PNG cache."
+    }
+  ]
+}

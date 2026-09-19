@@ -1,104 +1,74 @@
 # Spotify Audio Analytics: Evolution & Prediction
 
-## Overview
-This repository contains two exploratory projects: an EDA based on playlist,
-metadata and derived lyric features, and a decade-classification notebook based
-on a separately acquired Spotify/Kaggle dataset. It does not currently extract
-or analyse Spotify audio features in the EDA notebook.
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md)
 
-## Repository Structure
+Two separate studies explore playlist metadata and lyric-derived features,
+and predict release decades from a Spotify/Kaggle audio-feature snapshot.
+The EDA does not use Spotify audio features.
 
-The project is organized into two main directories:
+## Music Evolution
 
-```text
-Spotify EDA and Random Forest/
-│
-├── music_evolution/              # Project 1: Exploratory Data Analysis
-│   ├── music_evolution.ipynb     # Main analysis notebook
-│   ├── dataset_final_completed.csv
-│   ├── dataset_fixed.csv
-│   └── dataset_music.csv
-│
-├── predict_decades/              # Project 2: Machine Learning Classification
-│   ├── predict_decades.ipynb     # ML Training and Evaluation notebook
-│
-└── README.md
+Run [Music_evolution/music_evolution.ipynb](Music_evolution/music_evolution.ipynb)
+with the shared [Python environment](../RUNNING.md). By default it reads the
+three supplied CSV snapshots, requires no credentials and makes no API calls.
+The final playlist sample contains 789 tracks labeled from the 1950s through
+the 2020s. It is a selected playlist sample, not a representative history of
+music production.
+
+The plots describe duration, popularity, explicit status, genre, album-year
+discrepancies and lyric-derived metrics. TextBlob polarity is a lexical
+sentiment score; type-token ratio depends on text length; words per minute
+is word count divided by track duration. None directly measures emotional
+intent, compositional complexity or vocal delivery speed. The broad genre
+mapping leaves 420 of 789 tracks (53.23%) unclassified.
+
+Derived metrics were checked against the locally recovered original text
+snapshots and recomputed with the pinned tokenizer. Raw lyrics are not
+redistributed. To regenerate the three derived CSVs from your own copies:
+
+```bash
+cd Music_evolution
+../../.venv/bin/python -m nltk.downloader punkt_tab
+../../.venv/bin/python scripts/recompute_metrics.py /path/to/original/snapshots
 ```
 
------
+The source directory must contain the three same-named CSVs with a `Lyrics`
+column. Outputs omit raw lyrics; word density uses the stored duration in
+minutes. Missing lyrics produce missing sentiment/richness/density values.
 
-## Project 1: Music Evolution (EDA)
+Optional live enrichment requires `MUSIC_REFRESH=1`, `SPOTIFY_CLIENT_ID`,
+`SPOTIFY_CLIENT_SECRET` and `GENIUS_TOKEN`. Refreshed files go under
+`Music_evolution/data/refresh/`. API availability and returned metadata may
+change; the checked results use the supplied snapshots.
 
-**Location:** `/music_evolution`
+## Decade prediction
 
-### Objective
+Run [Predict_decades/predict_decades.ipynb](Predict_decades/predict_decades.ipynb).
+Obtain `tracks.csv` from version 1 of the
+[Spotify Dataset 1921–2020, 600k+ Tracks](https://www.kaggle.com/datasets/yamaerenay/spotify-dataset-19212020-600k-tracks/versions/1).
+Put it in `Predict_decades/data/`, or set `SPOTIFY_TRACKS_CSV` to its path.
+The source contains 586,672 tracks and 20 columns.
 
-To visualize and understand the historical trends in music production and composition from the 1950s to the 2020s.
+The notebook removes repeated IDs, duplicate model-input vectors and vectors
+with conflicting decade labels. It restricts tracks to the 1940s–2020s and
+durations of one to ten minutes, then samples 16,036 tracks per decade.
+The stratified split contains 115,459 training and 28,865 test tracks. Feature
+exploration uses training rows. Eleven numeric audio descriptors, including
+duration, enter a 100-tree random forest with maximum depth 20; release dates,
+artist identifiers, lyrics, key and mode are excluded from the model.
 
-### Key Analysis
+| Metric | Test result | Uniform-random baseline |
+|---|---:|---:|
+| Exact decade | 39.85% | 11.11% |
+| Exact or adjacent decade | 73.04% | 30.86% |
 
-This notebook explores questions such as:
+Acousticness and loudness have the largest impurity-based feature importances
+in this fit. This does not establish that technology causes the observed
+differences, or that excluded inputs are uninformative. The split is not
+grouped by artist, remaster or recording family, and catalog release dates
+can describe reissues. Results therefore measure track-level prediction in
+this balanced snapshot, not generalization to unseen artists or a complete
+future decade.
 
-  * Playlist decade labels, album year and remaster/reissue discrepancies.
-  * Metadata such as duration, popularity, explicit status and genre.
-  * Derived lexical and sentiment metrics. Raw lyrics are deliberately not
-    redistributed; API credentials are read from environment variables.
-
------
-
-## Project 2: Decade Prediction (Machine Learning)
-
-**Location:** `/predict_decades`
-
-### Objective
-
-To build a classification model that predicts the release decade of a track using only technical audio features (no lyrics or metadata).
-
-### Methodology
-
-1.  **Data Preprocessing:**
-      * Cleaning outliers (duration filtering).
-      * Addressing Class Imbalance (Undersampling to approx 17k songs per decade).
-      * Filtering data from 1940 to 2020.
-2.  **Model:** Random Forest Classifier.
-3.  **Feature Engineering:** Utilizing audio metrics like `loudness`, `acousticness`, `valence`, and `speechiness`.
-
-### Results
-
-  * **Exact Accuracy:** approx 40 percent (vs approx 11 percent random chance).
-  * **Adjacent Accuracy:** approx 73 percent.
-      * *Note: Adjacent Accuracy counts a prediction as correct if it falls within the exact decade or the immediate neighboring decades (±10 years), reflecting the continuous nature of musical evolution.*
-
-### Key Insights
-
-The model identified **`acousticness`** and **`loudness`** as the most critical features for determining a song's era, confirming that production technology is a stronger temporal marker than musical key or mode.
-
------
-
-## Tech Stack & Requirements
-
-The projects are built using **Python** and the following data science libraries:
-
-  * **Pandas:** Data manipulation and cleaning.
-  * **NumPy:** Numerical operations.
-  * **Matplotlib / Seaborn:** Advanced data visualization.
-  * **Scikit learn:** Machine Learning (Random Forest, Splitting, Metrics).
-
-## How to Run
-
-1.  Clone this repository.
-2.  Navigate to the desired folder (`music_evolution` or `predict_decades`).
-3.  Set `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` and `GENIUS_TOKEN` in the
-    environment only when API enrichment is required. Do not save credentials
-    in a notebook or dataset. The decade-prediction source CSV is not bundled;
-    obtain and version it separately before executing that notebook.
-4.  Launch Jupyter Notebook:
-    ```bash
-    jupyter notebook
-    ```
-5.  Open the `.ipynb` file and run all cells.
-
------
-
-*Author: Alejandro Treny Ortega*  
-*Data Source: Spotify API*
+Author: Alejandro Treny Ortega. Sources: cached Spotify/Genius enrichment
+and the separately acquired Kaggle dataset described above.

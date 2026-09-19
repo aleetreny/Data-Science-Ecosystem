@@ -15,10 +15,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-RUN wget -q "https://github.com/quarto-dev/quarto-cli/releases/download/v${QUARTO_VERSION}/quarto-${QUARTO_VERSION}-linux-amd64.deb" \
+RUN wget -q "https://github.com/quarto-dev/quarto-cli/releases/download/v${QUARTO_VERSION}/quarto-${QUARTO_VERSION}-linux-$(dpkg --print-architecture).deb" \
     && apt-get update \
-    && apt-get install -y --no-install-recommends "./quarto-${QUARTO_VERSION}-linux-amd64.deb" \
-    && rm "quarto-${QUARTO_VERSION}-linux-amd64.deb" \
+    && apt-get install -y --no-install-recommends "./quarto-${QUARTO_VERSION}-linux-$(dpkg --print-architecture).deb" \
+    && rm "quarto-${QUARTO_VERSION}-linux-$(dpkg --print-architecture).deb" \
     && rm -rf /var/lib/apt/lists/*
 
 RUN Rscript -e "\

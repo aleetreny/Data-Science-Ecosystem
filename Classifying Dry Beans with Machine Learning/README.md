@@ -1,5 +1,7 @@
 # Classifying Dry Beans with Machine Learning
 
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md) · [Report source](notebook.qmd)
+
 A comparative study of KNN, SVM, Decision Trees, Random Forests, and Neural Networks on the [UCI Dry Bean Dataset](https://archive.ics.uci.edu/dataset/602/dry+bean+dataset).
 
 ------------------------------------------------------------------------
@@ -18,26 +20,26 @@ The analysis uses one stratified train/test split for final reporting. Hyperpara
 |------------------------------------|------------------------------------|
 | Source | UCI ML Repository — [ID 602](https://archive.ics.uci.edu/dataset/602/dry+bean+dataset) |
 | Reference | Koklu & Ozkan (2020), *Computers and Electronics in Agriculture* |
-| Samples | 13,611 bean grains |
+| Samples | 13,611 source rows; 13,543 unique records after removing 68 duplicates |
 | Features | 16 morphological descriptors (size, shape, elongation, composite indices) |
 | Classes | 7 (BARBUNYA, BOMBAY, CALI, DERMASON, HOROZ, SEKER, SIRA) |
 | Missing values | None |
-| Train / Test split | 10,888 / 2,723 (80/20, stratified, `SEED=42`) |
+| Train / Test split | 10,834 / 2,709 (80/20, stratified, `SEED=42`) |
 
 ------------------------------------------------------------------------
 
 ## Methods & Results
 
-| Method        | Selection protocol    | Final test metrics | Needs Scaling |
-|---------------|---------------|---------------|---------------|
-| Decision Tree | Training-fold CV      | Regenerate notebook | No            |
-| Random Forest | Training-fold CV      | Regenerate notebook | No            |
-| KNN           | Training-fold CV      | Regenerate notebook | Yes           |
-| Linear SVM    | Training-fold CV      | Regenerate notebook | Yes           |
-| RBF SVM       | Training-fold CV      | Regenerate notebook | Yes           |
-| MLP           | Training-fold CV      | Regenerate notebook | Yes           |
+| Method | Training-CV choice | Test accuracy | Macro F1 |
+| :--- | :--- | ---: | ---: |
+| Decision Tree | max_depth=8 | 0.894426 | 0.907051 |
+| KNN | k=19 | 0.917682 | 0.929226 |
+| Linear SVM | C=0.5 | 0.919158 | 0.931035 |
+| Random Forest | 300 trees | 0.919897 | 0.931090 |
+| MLP | 128–64 hidden units | 0.921742 | 0.9318 |
+| RBF SVM | C=10, gamma=scale | 0.923588 | 0.934727 |
 
-The values in earlier rendered output predate the cross-validated selection protocol and are intentionally not retained as final results. Regenerate the notebook to obtain comparable held-out metrics; confusion patterns should be described as empirical observations, not irreducible error, unless supported by additional analysis.
+These are the regenerated results after removing duplicates and selecting configurations by training cross-validation. Differences on one test split do not establish a stable model ranking or an irreducible error floor. Scaling is used for KNN, SVM and MLP and fitted inside their CV folds.
 
 ------------------------------------------------------------------------
 
@@ -54,7 +56,7 @@ notebook.qmd
 │   ├── Feature scaling motivation
 │   ├── Bias-variance sweep (k = 1 … 30)
 │   ├── Classification report & confusion matrix
-│   └── PCA visualisation (81.9% variance retained)
+│   └── PCA visualisation (retained variance reported in the notebook)
 │
 ├── 3. Support Vector Machines (SVM)
 │   ├── C sweep — linear and RBF kernels
@@ -66,7 +68,7 @@ notebook.qmd
 │   ├── max_depth sweep (1 … 20)
 │   ├── Tree visualisation (depth-4 readable structure)
 │   ├── Random forest ensemble effect
-│   ├── OOB score as free validation estimate
+│   ├── OOB diagnostic from training data
 │   └── Feature importance: Tree vs. Forest vs. SVM
 │
 ├── 5. Neural Networks (MLP)
@@ -75,7 +77,7 @@ notebook.qmd
 │   ├── Final confusion matrix
 │   └── All-methods comparison
 │
-└── 6. SHAP: Explaining the Random Forest
+└── 6. Permutation Shapley Values: Explaining the Random Forest
     ├── Background: The Shapley Value
     ├── Global Feature Importance
     ├── Per-Class Feature Importance
@@ -85,77 +87,16 @@ notebook.qmd
 
 ------------------------------------------------------------------------
 
-## Requirements
+## Requirements and execution
 
-To run the notebook, you need `python >= 3.9` and the following dependencies:
+Use Python 3.12 and the [shared pinned environment](../RUNNING.md). Quarto must use the registered `data-science-ecosystem` Jupyter kernel. From this project directory:
 
-``` bash
-pip install ucimlrepo "scikit-learn>=1.8" numpy pandas matplotlib seaborn plotly torch ipykernel pyyaml nbformat nbclient notebook jupyter ipython
+```bash
+quarto render notebook.qmd --to html
 ```
 
-The dataset is fetched automatically at runtime via `ucimlrepo`:
+The dataset comes from UCI ID 602 via `ucimlrepo`; an existing `data/dry_beans.csv` cache can be reused. On affected Apple Silicon systems, follow the OpenBLAS-wheel instructions in the shared runtime guide rather than suppressing numerical warnings.
 
-``` python
-from ucimlrepo import fetch_ucirepo
-dry_bean = fetch_ucirepo(id=602)
-```
+## Interpretation
 
-------------------------------------------------------------------------
-
-## Running the Notebook
-
-The notebook is written in [Quarto](https://quarto.org/) (`.qmd`) and uses a Jupyter kernel. To render it:
-
-``` bash
-# Install Quarto: [https://quarto.org/docs/get-started/](https://quarto.org/docs/get-started/)
-quarto render notebook.qmd
-```
-
-Or to preview it interactively:
-
-``` bash
-quarto preview notebook.qmd
-```
-
-Make sure your Jupyter environment is named `my_env` (as specified in the YAML header), or update the `jupyter:` field to match your kernel name.
-
-------------------------------------------------------------------------
-
-## Virtual environment (recommended)
-
-Since this repository contains the notebook natively, you can easily create a virtual environment and install the required packages manually. Run the following commands from the repository root:
-
-**On Windows (PowerShell):**
-
-``` powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install ucimlrepo "scikit-learn>=1.8" numpy pandas matplotlib seaborn plotly torch ipykernel pyyaml nbformat nbclient notebook jupyter ipython
-```
-
-**On macOS / Linux:**
-
-``` bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install ucimlrepo "scikit-learn>=1.8" numpy pandas matplotlib seaborn plotly torch ipykernel pyyaml nbformat nbclient notebook jupyter ipython
-```
-
-Note on `torch`:
-
-- `torch` is listed in the dependencies because some analyses include it; if you do not need PyTorch you can remove it from the installation command.
-
-- For GPU-enabled installs on Windows, prefer the official PyTorch install selector at https://pytorch.org/get-started/locally/ to obtain the correct wheel command.
-
-------------------------------------------------------------------------
-
-## Highlights
-
-- **BOMBAY** is perfectly classified (F1 = 1.000) by every method — it is morphologically the largest variety and occupies a fully isolated region of the feature space.
-- **SIRA/DERMASON** is the dominant confusion pair across all methods, accounting for \~50 misclassifications per model regardless of algorithm complexity.
-- The **linear SVM coefficient analysis** shows that elongation features (ShapeFactor1, AspectRation, Eccentricity) are more discriminative than raw size — a non-obvious result.
-- The **random forest** spreads feature importance far more evenly than the single tree, exposing correlations that tree greedy splitting would otherwise suppress.
-- The **MLP** achieves the highest accuracy (0.9284) but offers no interpretability advantage over the RBF SVM (0.9262), making the SVM the better practical choice when explainability matters.
-- **SHAP Analysis** reveals that the forest's classification strategy is heterogeneous: BOMBAY is identified purely by scale, SEKER by shape regularity composites, and DERMASON by a diffuse collective vote across many elongation and size features.
+The notebook reports per-class errors, model-specific feature importances and Monte Carlo permutation Shapley explanations for a fixed explained subset. Their decomposition is checked for every displayed instance and class. The marginal background construction can combine correlated measurements in unrealistic ways, and the small explained subset does not establish population-wide feature importance. These are explanations of fitted predictions, not causal effects or biological mechanisms.

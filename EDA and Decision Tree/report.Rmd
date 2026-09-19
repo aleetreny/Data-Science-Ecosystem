@@ -12,6 +12,9 @@ output:
 geometry: margin=1.5cm
 fontsize: 10pt
 classoption: twocolumn
+header-includes:
+  - \usepackage{float}
+  - \raggedbottom
 ---
 
 ```{r setup, include=FALSE}
@@ -22,6 +25,7 @@ knitr::opts_chunk$set(
   fig.align = "center",
   fig.width = 3.5,
   fig.height = 3,
+  fig.pos = "H",
   out.width = "100%"
 )
 
@@ -39,13 +43,13 @@ student_data <- read.csv("student_data.csv", sep = ";", header = TRUE)
 
 # PART A: Exploratory Data Analysis
 
-This report presents a comprehensive exploratory analysis of the "Student Performance" dataset from the UCI Machine Learning Repository. The dataset contains information on 395 students from Portuguese secondary schools, encompassing demographic characteristics, family background, academic history, and final performance metrics. Our analysis focuses on identifying key factors that influence student academic achievement through well-structured research questions and appropriate statistical visualization techniques.
+This report presents a comprehensive exploratory analysis of the "Student Performance" dataset from the UCI Machine Learning Repository. The dataset contains information on 395 students from Portuguese secondary schools, encompassing demographic characteristics, family background, academic history, and final performance metrics. Our analysis focuses on identifying key associations with student academic achievement through well-structured research questions and appropriate statistical visualization techniques.
 
-## Research Question 1: Parental Education Impact
+## Research Question 1: Parental Education and Grades
 
-**Question:** How does the maximum parental education level influence mean final grade (G3)?
+**Question:** How is maximum parental education associated with mean final grade (G3)?
 
-**Methodology:** We created a composite variable representing the higher educational attainment between mother (Medu) and father (Fedu), reasoning that the more educated parent likely has greater influence on academic outcomes. A bar chart with error bars (standard error of the mean) visualizes the relationship between parental education levels and student performance.
+**Methodology:** We created a composite variable representing the higher educational attainment between mother (Medu) and father (Fedu), as a descriptive summary of the two parental education measurements. A bar chart with error bars (standard error of the mean) visualizes the relationship between parental education levels and student performance.
 
 ```{r q1-prep, include=FALSE}
 student_data$max_parent_edu <- pmax(student_data$Medu, student_data$Fedu)
@@ -55,7 +59,7 @@ parent_edu_summary <- student_data %>%
   summarise(mean_G3 = mean(G3), count = n(), sd_G3 = sd(G3), .groups = "drop")
 ```
 
-```{r q1-viz, fig.cap="Impact of Maximum Parental Education on Student Final Grade"}
+```{r q1-viz, fig.cap="Maximum Parental Education and Student Final Grade"}
 ggplot(parent_edu_summary, aes(x = factor(max_parent_edu), y = mean_G3,
                                fill = factor(max_parent_edu))) +
   geom_col(color = "black", width = 0.65) +
@@ -64,8 +68,8 @@ ggplot(parent_edu_summary, aes(x = factor(max_parent_edu), y = mean_G3,
   geom_text(aes(y = mean_G3 + sd_G3/sqrt(count) + 0.25,
                 label = sprintf("%.2f", mean_G3)), vjust = 0, size = 2.5) +
   labs(x = "Maximum Parental Education Level", y = "Mean Final Grade (G3)",
-       title = "Parental Education Impact") +
-  scale_x_discrete(labels = c("4th grade", "5-9th grade", "Secondary", "Higher education")) +
+       title = "Parental Education and Grades") +
+  scale_x_discrete(labels = c("0"="None", "1"="4th grade", "2"="5-9th grade", "3"="Secondary", "4"="Higher education")) +
   scale_fill_brewer(palette = "Blues") +
   theme_minimal(base_size = 8) +
   theme(legend.position = "none", axis.title = element_text(size = 8),
@@ -73,7 +77,7 @@ ggplot(parent_edu_summary, aes(x = factor(max_parent_edu), y = mean_G3,
         axis.text.x = element_text(angle = 45, hjust = 1, size = 7))
 ```
 
-**Interpretation:** The bar chart reveals a clear positive relationship between parental education and student academic performance. Students whose most educated parent completed higher education achieve the highest mean grade (11.57), while those from families with primary education only (4th grade) show the lowest performance (8.51). The error bars indicate confidence in these differences, suggesting that parental educational background serves as a strong predictor of student success, likely through mechanisms such as academic support, educational resources, and high expectations.
+**Interpretation:** Mean final grade increases across these parental-education groups, from 8.51 to 11.57. The bars show mean plus/minus one standard error, not confidence intervals or a hypothesis test. These unadjusted observational associations do not establish a causal mechanism.
 
 ## Research Question 2: Grade Distribution Analysis
 
@@ -107,9 +111,9 @@ ggplot(df_di, aes(pass_margin)) +
         plot.title = element_text(size = 9, face = "bold"))
 ```
 
-**Interpretation:** The histogram reveals important patterns in student performance distribution. Approximately `r 100-below_pct`% of students achieve the passing threshold or better, indicating generally acceptable academic outcomes. However, the distribution shows some concerning features: a notable cluster of students with very low scores (particularly those scoring 0, indicating potential dropouts or non-attendance at final exams), and a relatively broad spread of failing grades. The concentration of students just above the passing threshold suggests that targeted interventions could help many borderline students achieve better outcomes.
+**Interpretation:** `r pass_pct`% of students pass and `r below_pct`% fail. A recorded zero does not by itself identify dropout or exam absence. The figure describes outcomes; it does not estimate an intervention effect.
 
-## Research Question 3: Educational Aspirations Impact
+## Research Question 3: Educational Aspirations and Grades
 
 **Question:** How does a student's aspiration for higher education relate to their final grade (G3) distribution?
 
@@ -131,18 +135,18 @@ ggplot(df_hi, aes(higher, G3, fill = higher)) +
   geom_hline(yintercept = 10, linetype = "dashed", color = "gray") +
   scale_fill_manual(values = c("No"="#ee6d6a", "Yes"="#9dbbe0"), guide = "none") +
   labs(x = "Wants Higher Education", y = "Final Grade (G3)",
-       title = "Aspiration Impact") +
+       title = "Aspirations and Grades") +
   theme_minimal(base_size = 8) +
   theme(axis.title = element_text(size = 8), plot.title = element_text(size = 9, face = "bold"))
 ```
 
-**Interpretation:** The violin-boxplot combination reveals striking differences between students who aspire to higher education versus those who do not. Students with higher education aspirations show substantially better academic performance, with a higher median, smaller interquartile range, and dramatically higher pass rates (approximately 69% vs 35%). The violin plots reveal that aspirational students have a more concentrated distribution around higher grades, while non-aspirational students show greater variability and a concerning concentration of low performers. This suggests that educational aspirations either drive academic effort or reflect realistic self-assessment of academic capabilities.
+**Interpretation:** Pass rates are 68.8% among students reporting higher-education aspirations and 35.0% among those not reporting them. The groups differ in other observed and unobserved characteristics, so the association cannot establish whether aspirations change grades.
 
-## Research Question 4: Academic History Effects
+## Research Question 4: Academic History Associations
 
-**Question:** How does a history of academic failures (1+ failures) affect the relationship between G2 and G3?
+**Question:** How do the observed G2 and G3 values vary across groups with and without past academic failures?
 
-**Methodology:** A scatter plot with regression overlay examines the predictive relationship between second period (G2) and final grades (G3), stratified by failure history. This approach allows us to assess whether past academic difficulties alter the typical grade progression patterns and the strength of this predictive relationship.
+**Methodology:** A scatter plot colors second-period (G2) and final grades (G3) by failure history and overlays a pooled regression line. It describes the sample relationship without testing differences in slopes between groups.
 
 ```{r q4-viz, fig.cap="Relationship between G2 and G3 by Academic Failure History"}
 student_data %>%
@@ -160,13 +164,13 @@ student_data %>%
         axis.title = element_text(size = 8), plot.title = element_text(size = 9, face = "bold"))
 ```
 
-**Interpretation:** The scatter plot demonstrates a strong positive correlation between G2 and G3 grades (r ≈ 0.8), indicating that second-period performance is highly predictive of final outcomes. However, students with past academic failures (red points) are predominantly clustered in the lower-grade regions, showing that failure history creates persistent academic disadvantage. The overall regression line suggests that while the G2-G3 relationship remains consistent, students with failure histories require more intensive support to achieve grade improvements, as they start from systematically lower baselines.
+**Interpretation:** The Pearson correlation between G2 and G3 is `r round(cor(student_data$G2, student_data$G3), 3)`. The black regression line is pooled across failure-history groups. It does not test a difference in slopes or establish the effect of past failure.
 
-## Research Question 5: Comprehensive Factor Analysis
+## Research Question 5: Rank Correlation Analysis
 
 **Question:** Which numerical/ordinal factors have the strongest correlation with final grade (G3)?
 
-**Methodology:** We calculated Spearman rank correlations between all numeric/ordinal variables and G3, presenting results via a lollipop plot. This non-parametric approach is robust to outliers and captures monotonic relationships regardless of linearity assumptions, providing a comprehensive overview of variable importance.
+**Methodology:** We calculated Spearman rank correlations between the selected numeric/ordinal variables and G3, presenting results via a lollipop plot. Rank correlations describe marginal monotonic associations; they do not measure adjusted predictive importance.
 
 ```{r q5-prep, include=FALSE}
 numeric_data <- student_data %>%
@@ -199,7 +203,7 @@ ggplot(cor_g3, aes(x = correlation, y = reorder(variable, correlation), color = 
         axis.text = element_text(size = 6))
 ```
 
-**Interpretation:** The correlation analysis reveals that prior academic performance (G1, G2) shows the strongest positive correlations with final grades, confirming academic consistency as the primary predictor. Among non-grade variables, parental education levels (Medu, Fedu) demonstrate moderate positive correlations, supporting our earlier findings. Negative correlations appear for academic failures and absence rates, indicating clear risk factors. Social variables like alcohol consumption and going out frequency show weaker but meaningful negative correlations, suggesting lifestyle factors impact academic performance. This comprehensive view guides our understanding of multifaceted influences on student achievement.
+**Interpretation:** The strongest Spearman correlations with G3 are G2 (`r round(cor_matrix["G2", "G3"], 3)`) and G1 (`r round(cor_matrix["G1", "G3"], 3)`). Past failures correlate negatively (`r round(cor_matrix["failures", "G3"], 3)`), whereas absences are close to uncorrelated (`r round(cor_matrix["absences", "G3"], 3)`). These marginal associations are not causal effects or adjusted predictive importances.
 
 \onecolumn
 \newpage
@@ -208,13 +212,13 @@ ggplot(cor_g3, aes(x = correlation, y = reorder(variable, correlation), color = 
 
 ## Objective and Methodology
 
-This section develops a robust decision tree model to predict whether students achieve satisfactory performance (G3 ≥ 10) using demographic, social, and academic variables while excluding prior grades (G1, G2) to enhance practical applicability for early intervention strategies.
+This section evaluates a decision tree model to predict whether students achieve satisfactory performance (G3 >= 10) using demographic, social, and academic variables while excluding prior grades (G1, G2) to examine prediction without earlier grade measurements.
 
 ## Model Development Process
 
-**Data Preparation:** We created a binary target variable classifying students as high-performing (G3 ≥ 10) or low-performing (G3 < 10). The dataset was split into 70% training (277 observations) and 30% testing (118 observations) using stratified sampling to maintain class proportions.
+**Data Preparation:** We created a binary target variable classifying students as passing (G3 >= 10) or failing (G3 < 10). The dataset was split into 70% training (277 observations) and 30% testing (118 observations) using stratified sampling to maintain class proportions.
 
-**Model Training:** We employed 10-fold cross-validation with ROC optimization to tune the complexity parameter (cp), testing 34 different values from 0.001 to 0.1. This approach ensures robust model selection while preventing overfitting and optimizing predictive performance across the entire range of model complexity.
+**Model Training:** We employed 10-fold cross-validation with ROC optimization to tune the complexity parameter (cp), testing 34 different values from 0.001 to 0.1. Cross-validation selects among the specified candidates; it does not guarantee prevention of overfitting.
 
 ## Optimized Decision Tree Structure
 
@@ -250,62 +254,42 @@ final_tree <- tree_model$finalModel
 preds <- predict(tree_model, test_dat)
 
 conf <- confusionMatrix(preds, test_dat$high_performance, positive = "Yes")
+majority_class <- names(which.max(table(train_dat$high_performance)))
+baseline_accuracy <- mean(test_dat$high_performance == majority_class)
 ```
 
-```{r tree-plot, fig.width=9.5, fig.height=7, fig.cap="Optimized Decision Tree for Predicting High Academic Performance"}
-rpart.plot(final_tree, main = "Decision Tree: Predicting High Performance (G3 ≥ 10)",
+```{r tree-plot, fig.width=9.5, fig.height=7, fig.cap="Optimized Decision Tree for Predicting Passing"}
+rpart.plot(final_tree, main = "Decision Tree: Predicting Passing (G3 >= 10)",
            extra = 104, box.palette = "RdYlGn", branch.lty = 3,
            shadow.col = "gray85", nn = TRUE, split.yshift = -1, split.yspace = 2)
 ```
 
-**Tree Interpretation:** The optimized decision tree reveals several critical decision pathways:
-
-1. **Primary Split on Failures:** The root node splits on academic failures, immediately identifying students with prior difficulties as high-risk for continued poor performance.
-
-2. **Secondary Factors:** For students without failures, the tree considers factors such as study time, parental education, family relationship quality, and educational aspirations.
-
-3. **Risk Pathways:** Students with multiple failures combined with poor study habits or low family support show particularly high risk for continued underperformance.
-
-4. **Success Pathways:** Students with no failures, adequate study time, and higher educational aspirations demonstrate strong predictive indicators for success.
+**Tree interpretation:** Read the fitted splits and leaf probabilities from the diagram. They describe associations in this training sample; leaf probabilities are not calibrated individual risk estimates, and split order is not a causal ranking.
 
 ## Model Performance Evaluation
 
 **Performance Metrics on Test Set:**
 
-- **Accuracy:** `r round(conf$overall["Accuracy"], 4)` (59.3% of predictions correct)
+- **Accuracy:** `r round(conf$overall["Accuracy"], 4)`
 
 - **Kappa:** `r round(conf$overall["Kappa"], 4)` (agreement beyond chance)
 
-- **Sensitivity (Recall):** `r round(conf$byClass["Sensitivity"], 4)` (81% of successes identified)
+- **Sensitivity (Recall):** `r round(conf$byClass["Sensitivity"], 4)`
 
-- **Specificity:** `r round(conf$byClass["Specificity"], 4)` (15.4% of failures identified)
+- **Specificity:** `r round(conf$byClass["Specificity"], 4)`
 
-- **Precision (Positive Predictive Value):** `r round(conf$byClass["Pos Pred Value"], 4)` (66% of predicted successes are correct)
+- **Precision (Positive Predictive Value):** `r round(conf$byClass["Pos Pred Value"], 4)`
 
 - **F1-Score:** `r round(2*(conf$byClass["Sensitivity"]*conf$byClass["Pos Pred Value"])/(conf$byClass["Sensitivity"]+conf$byClass["Pos Pred Value"]), 4)` (balance of precision and recall)
 
-**Performance Analysis:** The model achieves strong predictive performance with an accuracy of 0.593 and excellent discriminative ability. The high sensitivity (0.8101) indicates effective identification of successful students, while the specificity (0.1538) demonstrates ability to correctly identify at-risk students. The precision of 0.6598 suggests that approximately two-thirds of predictions for high performance are accurate.
+**Performance Analysis:** Test accuracy is `r round(conf$overall["Accuracy"], 4)`, compared with `r round(baseline_accuracy, 4)` for always predicting the training-majority class. Specificity is recall for failing students: `r round(conf$byClass["Specificity"], 4)`. These results do not support describing this model as an effective early-warning system. Accuracy alone also does not measure probability ranking or calibration.
 
-## Conclusions and Educational Implications
+## Conclusions and limitations
 
-**Key Findings:**
+This analysis describes one sample of 395 students and evaluates a tree on 118 held-out observations. Cross-validation selects the complexity parameter using the training partition only. The outcome means passing, not exceptional academic performance.
 
-1. **Academic history dominates prediction:** Prior failures serve as the strongest predictor, emphasizing the importance of early academic success and the cumulative nature of academic disadvantage.
+The descriptive associations do not identify causes or demonstrate that an intervention would improve outcomes. Excluding G1 and G2 is insufficient to establish an early-warning use case: the time at which remaining variables, including accumulated absences, become available would also need verification.
 
-2. **Multifactor risk assessment:** Students with multiple risk factors (failures + poor study habits + low support) require intensive intervention. No single factor guarantees success or failure.
+The held-out results must be compared with the majority-class baseline and the poor recall for failing students. Independent schools or cohorts, probability calibration, uncertainty estimates and an assessment of intervention costs would be required before considering educational use.
 
-3. **Actionable early warning system:** The model can identify at-risk students before final grade determination, enabling targeted support interventions for maximum effectiveness.
-
-**Educational Recommendations:**
-
-- Implement continuous monitoring systems for students showing early academic difficulties, with automated alerts for intervention triggers.
-
-- Develop comprehensive support programs addressing both academic skills (tutoring, study methods) and motivational factors (goal-setting, engagement).
-
-- Focus intervention resources on students with identified risk factor combinations rather than single-factor approaches.
-
-- Strengthen family engagement programs to improve home support for academic achievement.
-
-- Provide study habits coaching and time management support, particularly for at-risk populations.
-
-This predictive model provides educators with a data-driven tool for proactive student support, potentially improving overall academic outcomes through early identification and targeted intervention strategies.
+Dataset: [UCI Student Performance](https://archive.ics.uci.edu/dataset/320/student+performance), mathematics subset, Cortez and Silva (2008).

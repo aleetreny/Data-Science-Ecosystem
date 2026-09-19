@@ -4,8 +4,9 @@ subtitle: "PCA on astronomical data"
 author: "Alejandro Treny Ortega"
 date: "`r Sys.Date()`"
 prefer-html: true
-format: 
+format:
   html:
+    format-links: false
     toc: true
     toc-depth: 3
     code-fold: true
@@ -14,6 +15,7 @@ format:
     theme: cosmo
     number-sections: true
   pdf:
+    pdf-engine: xelatex
     toc: true
     toc-depth: 3
     code-fold: false
@@ -25,11 +27,11 @@ format:
 
 Each star is unique—some are enormous and flaming hot, others are small and cool. Around these stars, we've discovered hundreds of planets, each with its own orbit and size. But: **How far do correlations go in astronomical observations?**
 
-The Kepler Space Telescope dataset contains **153 variables** describing exoplanet candidates. 
+The Kepler Space Telescope dataset contains **153 variables** describing exoplanet candidates.
 
-We have used **Principal Component Analysis (PCA)** as a tool to approach this data. PCA understood as an statistical technique that takes high-dimensional data and transforms it into a simpler set of "new dimensions"—dimensions that capture the most important patterns hidden in the original data. **Is this feasible in such data?**
+We have used **Principal Component Analysis (PCA)** as a tool to approach this data. PCA is a statistical technique that takes high-dimensional data and transforms it into a simpler set of "new dimensions"—dimensions that capture the most important patterns hidden in the original data. **Is this feasible in such data?**
 
-In this analysis, we'll explore this technique through the Kepler exoplanet dataset, discovering how stellar properties and orbital mechanics interact, why some variables are redundant, and ultimately, what the **true underlying structure** of the exoplanet population looks like.
+In this analysis, we'll explore this technique through the Kepler exoplanet dataset, discovering how stellar properties and orbital mechanics interact, why some variables are redundant, and ultimately, what the **linear structure in this selected sample** of the exoplanet population looks like.
 
 ---
 
@@ -61,7 +63,7 @@ set.seed(42)
 
 ## The Variables
 
-Let's understand what we're measuring. Our 14 selected variables fall into four natural categories:
+Let's understand what we're measuring. Our 14 selected variables fall into five categories:
 
 ### Identifiers and Classification
 - **kepid**: Unique target identifier
@@ -69,7 +71,7 @@ Let's understand what we're measuring. Our 14 selected variables fall into four 
 
 ### Vetting Flags (Red Flags for False Detections)
 - **koi_fpflag_nt**: Not Transit-Like Flag (binary: 0 or 1)
-- **koi_fpflag_ss**: Stellar-Stochastic Flag (binary: 0 or 1)
+- **koi_fpflag_ss**: Stellar Eclipse Flag (binary: 0 or 1)
 
 ### Orbital Parameters (What We Observe)
 - **koi_period**: Orbital period in days
@@ -119,13 +121,14 @@ df_selected <- df_koi %>%
 cat("Dataset dimensions:", nrow(df_selected), "observations,", ncol(df_selected), "variables\n")
 ```
 
-## Creating Domain-Knowledge Variables
+## Creating Descriptive Groups
 
-Before diving into PCA, we create some binary and categorical variables based on **astrophysical knowledge**. These won't be used in the PCA itself—they'll help us validate whether our new dimensions actually capture meaningful physical phenomena.These created binary/categorical variables are:
-  - Hot Star (using the median of tekk_k) - > binary variable.
-  - Large Planet (using radius = 4 from physics convention) - > binary variable.
-  - Insolation Class (using insolation terciles) -> categorical variable (low, medium, high).
-  - Stellat Brightness (using magnitude terciles) -> categoricla variable (bright, medium, dim).
+Before diving into PCA, we create some binary and categorical groups based on input values. These won't be used in the PCA itself—they describe associations with the inputs; they are not independent validation labels. The derived groups are:
+
+- Hot Star (using the median of teff_K): binary variable.
+- Large Planet (using a descriptive radius threshold of 4 Earth radii): binary variable.
+- Insolation Class (using insolation terciles): categorical variable (low, medium, high).
+- Stellar Brightness (using magnitude terciles): categorical variable (bright, medium, dim).
 
 ```{r create-derived-vars, warning=FALSE}
 df_selected <- df_selected %>%
@@ -133,27 +136,27 @@ df_selected <- df_selected %>%
     # Binary: Temperature
     # A star hotter than the median is classified as "hot"
     hot_star = if_else(teff_K > median(teff_K, na.rm = TRUE), 1, 0),
-    
+
     # Binary: Planet Size (Physical Threshold)
-    # 4 Earth-radii is a critical astrophysical boundary.
-    # Planets > 4 R⊕ are almost certainly gas giants with thick atmospheres.
-    # Planets < 4 R⊕ are likely rocky or water worlds.
+    # A descriptive threshold of 4 Earth radii; radius alone does not identify composition.
     large_planet = if_else(radius_earth > 4, 1, 0),
-    
+
     # Categorical: Energy Reception (Terciles)
     # We divide insolation into three equal-count groups.
     # This allows us to test if planets in different energy environments
     # have fundamentally different properties.
     insolation_class = case_when(
+      is.na(insolation) ~ NA_character_,
       insolation < quantile(insolation, 0.33, na.rm = TRUE) ~ "low",
       insolation < quantile(insolation, 0.66, na.rm = TRUE) ~ "medium",
       TRUE ~ "high"
     ),
-    
+
     # Categorical: Stellar Brightness (Terciles)
     # Note: magnitude is inverse. Smaller values = brighter stars.
-    # This captures observational bias: bright stars are easier to observe.
+    # These bins describe brightness; they do not correct observational bias.
     magnitude_class = case_when(
+      is.na(magnitude) ~ NA_character_,
       magnitude < quantile(magnitude, 0.33, na.rm = TRUE) ~ "bright",
       magnitude < quantile(magnitude, 0.66, na.rm = TRUE) ~ "medium",
       TRUE ~ "dim"
@@ -181,9 +184,9 @@ pca_vars <- c(
 )
 
 # Remove rows with missing values
-df_numeric_pca <- df_selected %>%
-  select(all_of(pca_vars)) %>%
-  na.omit()
+pca_rows <- complete.cases(df_selected[, pca_vars])
+df_numeric_pca <- df_selected[pca_rows, pca_vars]
+stopifnot(all(vapply(df_numeric_pca, function(x) all(is.finite(x)) && sd(x) > 0, logical(1))))
 
 cat("Clean dataset for PCA:", nrow(df_numeric_pca), "observations\n")
 ```
@@ -200,7 +203,7 @@ print("Raw Variances:")
 print(round(raw_variances[1:10], 3))
 ```
 
-```{r plot-raw-variance, fig.cap="Massive variance differences demonstrate the need for standardization. Note the logarithmic scale!"}
+```{r plot-raw-variance, fig.cap="Raw-unit variances on a logarithmic scale; standardization is the weighting choice used in this analysis."}
 # Convert to long format for visualization
 variances_long <- raw_variances %>%
   pivot_longer(
@@ -218,7 +221,7 @@ variance_plot <- ggplot(variances_long, aes(x = reorder(Variable, -Variance), y 
   ) +
   labs(
     title = "Variance Crisis: Raw Data Scale Disparity",
-    subtitle = "Why PCA on the Covariance Matrix Fails",
+    subtitle = "Raw units determine covariance-PCA weighting",
     x = "Variable",
     y = "Variance (Log Scale)"
   ) +
@@ -233,23 +236,21 @@ print(variance_plot)
 
 ### The Problem Explained
 
-The differences are **astronomical**. Some variables (like `depth_ppm` and `teff_K`) have variances in the millions, while others (like `logg` and `magnitude`) are tiny. 
+The differences are **astronomical**. Some variables (like `depth_ppm` and `teff_K`) have variances in the millions, while others (like `logg` and `magnitude`) are tiny.
 
-**Here's the catastrophe:** If we use the Covariance Matrix, the PCA algorithm would be completely dominated by the largest-variance variables. It would ignore the smaller ones entirely. The first principal component would essentially be an axis aligned with `depth_ppm` and `teff_K`—not because they're the most important physically, but because they **shout the loudest** in raw units.
-
-We need **standardization**.
+Covariance PCA weights variables in their raw units. Here we choose correlation PCA so each input has unit variance. This is an analysis choice, not a universal requirement.
 
 ---
 
 # Section 3: Quantifying the Intercorrelation
 
-Before we standardize, let's ask: **Is PCA even worth doing?** 
+Before we standardize, let's ask: **Is PCA even worth doing?**
 
-If our variables are completely independent, PCA gives us nothing. But if they're highly correlated, PCA will find underlying patterns. Let's measure this.
+For standardized uncorrelated inputs, variance is not concentrated in a smaller number of PCs. Correlation diagnostics can indicate scope for linear compression; they do not test statistical independence.
 
 ## Six Measures of Intercorrelation
 
-We calculate six different metrics (q1-q6), those studied in class, that all measure correlation from different angles. Each returns a score between 0 and 1, where 1 = perfect intercorrelation and 0 = no correlation.
+We calculate six classroom diagnostics of the raw correlation matrix. They have different baselines: at an identity matrix, q4 equals $p^{-3/2}$ and q5 equals $(1-1/p)^5$, so a high q5 alone does not prove redundancy.
 
 ```{r correlation-matrix}
 # Calculate correlation matrix R
@@ -288,14 +289,6 @@ intercorr_measures <- data.frame(
     "Max Eigenvalue Dominance",
     "Min Eigenvalue Magnitude",
     "Avg. Variance Inflation Factor"
-  ),
-  Interpretation = c(
-    "Medium spread (not all-or-nothing)",
-    "Medium intercorrelation",
-    "HIGH - Strong multicollinearity",
-    "LOW - Multiple components needed",
-    "VERY HIGH - Severe redundancy",
-    "Moderate VIF inflation"
   )
 )
 
@@ -304,13 +297,7 @@ knitr::kable(intercorr_measures, caption = "Six Intercorrelation Measures: What 
 
 ### Interpretation
 
-**PCA is strongly justified.**
-
-- **q3 (0.763)** and **q5 (0.934)** are the smoking guns. The determinant of R is near zero, and the minimum eigenvalue is tiny. This means the variables contain **massive redundancy**.
-
-- **q4 (0.143)** tells us something equally important: The largest eigenvalue is NOT dominant. This isn't a simple "size effect"—the correlation structure is **complex**, requiring multiple components to understand.
-
-- The moderate values for **q1, q2, q6** confirm that we'll need **3-4 components** to capture the story, not just one.
+The table describes raw-variable correlations. Retained variance and loadings from the transformed analysis below determine how useful the chosen reduction is.
 
 ---
 
@@ -329,16 +316,10 @@ corr_heatmap <- ggcorrplot(
   lab = TRUE,
   lab_size = 2.5,
   method = "square",
-  legend.title = "Correlation"
+  legend.title = "Correlation",
+  colors = c(col_neg, col_mid, col_pos),
+  legend.limit = c(-1, 1)
 ) +
-  scale_fill_gradient2(
-    low = col_neg,
-    mid = col_mid,
-    high = col_pos,
-    midpoint = 0,
-    limit = c(-1, 1),
-    name = "Correlation"
-  ) +
   theme_minimal(base_size = 10) +
   theme(
     plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
@@ -350,10 +331,7 @@ corr_heatmap <- ggcorrplot(
 print(corr_heatmap)
 ```
 
-**Key observations:**
-- **Stellar variables cluster together**: `mass_sun`, `radius_sun`, and `teff_K` are highly correlated. This makes physical sense—larger stars tend to be more massive and hotter.
-- **Orbital variables cluster separately**: `period_days` and `duration_hours` correlate strongly with each other (Kepler's laws) but negatively with `insolation` (more distant planets receive less energy).
-- **Surface gravity is anticorrelated** with both `mass_sun` and `radius_sun`, which is physically expected.
+Read the signs and magnitudes from this snapshot's heatmap. These correlations alone do not establish physical laws or causal relationships.
 
 ---
 
@@ -393,12 +371,7 @@ pairs_plot_log <- ggpairs(
 print(pairs_plot_log)
 ```
 
-**The transformation worked.** After trying different transformation options, now we can see clear relationships:
-- **radius_sun vs. mass_sun**: A perfect linear relationship
-- **depth_ppm vs. radius_earth**: Larger planets create deeper transit signals
-- **radius_sun vs. logg**: Inverse relationship (larger stars have lower surface gravity)
-
-This visual proof confirms that PCA will find meaningful patterns.
+Log10(x+1) reduces visual skew. Stellar mass and radius are not perfectly linearly related; transit depth also depends on host-star radius and other factors. The following PCA uses these transformed variables, with logg and magnitude left unchanged.
 
 ---
 
@@ -408,7 +381,7 @@ Now, we apply Z-score standardization:
 
 $$z_j = \frac{x_j - \bar{x}_j}{\sigma_j}$$
 
-This transforms each variable to mean 0 and variance 1, ensuring all variables contribute equally to the PCA.
+This transforms each variable to mean 0 and variance 1, giving each input unit marginal variance before PCA.
 
 ```{r standardization}
 # Apply Z-score standardization
@@ -447,19 +420,13 @@ print(pca_summary)
 - **Proportion of Variance**: How much variance this single component explains
 - **Cumulative Proportion**: The running total—this is our north star
 
-Look at the **Cumulative Proportion** row:
-- PC1 explains 36.9% of variance
-- PC1 + PC2 explain 58.8% of variance
-- PC1 + PC2 + PC3 explain 75.3% of variance
-- PC1 + PC2 + PC3 + PC4 explain 86.7% of variance
-
-We're reaching +80% target with just 4 components!
+The first four components retain **`r round(sum(pca_result$sdev[1:4]^2)/sum(pca_result$sdev^2)*100, 1)`%** of total standardized variance. The printed table gives each contribution.
 
 ---
 
 # Section 8: Interpreting the Components—Reading the PCA Equations
 
-Each principal component is a **linear combination** of the original variables. The coefficients (loadings) tell us which variables contribute most.
+Each principal component is a **linear combination** of the transformed, standardized variables. The coefficients (loadings) tell us which variables contribute most.
 
 ```{r extract-loadings}
 # Get loadings for first 4 components
@@ -467,44 +434,9 @@ loadings_matrix <- pca_result$rotation
 print(round(loadings_matrix[, 1:4], 3))
 ```
 
-### PC1: "Stellar Scale"
+Interpret component weights from the table above. Signs can reverse without changing the PCA geometry. Large absolute coefficients identify the variables contributing to a direction; names such as stellar scale or orbital properties are descriptive hypotheses.
 
-**Positive loadings:**
-- `radius_sun` (0.467), `mass_sun` (0.462), `teff_K` (0.269)
-
-**Negative loadings:**
-- `logg` (-0.463), `magnitude` (-0.312)
-
-**Interpretation:** PC1 separates large, hot, bright stars (positive) from small, cool, dim stars (negative). **It's a "stellar mass and size" axis.**
-
-### PC2: "Orbital Dynamics"
-
-**Positive loadings:**
-- `period_days` (0.564), `duration_hours` (0.516)
-
-**Negative loadings:**
-- `insolation` (-0.459)
-
-**Interpretation:** PC2 captures the planet's distance from its star. Distant planets have long periods and receive little energy (high PC2). Close planets orbit quickly and receive intense energy (low PC2). **It's a "planetary distance" axis.**
-
-### PC3: "Planetary Size & Signal Depth"
-
-**Negative loadings:**
-- `depth_ppm` (-0.628), `radius_earth` (-0.560)
-
-**Interpretation:** Large planets create deep transit signals. **It's a "planet size" axis.**
-
-### PC4: "Stellar Evolution"
-
-**Positive loadings:**
-- `teff_K` (0.773), `logg` (0.399)
-
-**Negative loadings:**
-- `radius_sun` (-0.392)
-
-**Interpretation:** This contrasts small, hot, dense stars against large, cooler stars. It captures **stellar evolutionary stage**—main sequence vs. evolved stars.
-
-```{r plot-loadings, fig.cap="Which variables contribute most to each component?"}
+```{r plot-loadings, fig.height=6, fig.cap="Which variables contribute most to each component?"}
 # Convert loadings to long format
 loadings_df <- as.data.frame(loadings_matrix[, 1:4]) %>%
   rownames_to_column(var = "Variable") %>%
@@ -520,7 +452,8 @@ loadings_plot <- ggplot(loadings_df, aes(x = reorder(Variable, Loading), y = Loa
     y = "Loading Coefficient"
   ) +
   theme_minimal() +
-  theme(legend.position = "bottom")
+  theme(legend.position = "none", panel.spacing = grid::unit(1, "lines"),
+        panel.spacing.x = grid::unit(2.5, "lines"))
 
 print(loadings_plot)
 ```
@@ -529,7 +462,7 @@ print(loadings_plot)
 
 # Section 9: How Many Components Do We Need?
 
-We apply **four different criteria** to find the optimal number of components:
+We apply **four different criteria** to compare choices of retained dimension:
 
 ```{r dimensionality-reduction-criteria}
 # Calculate eigenvalues and related metrics
@@ -554,7 +487,7 @@ cat("Method 2 (Kaiser, λ > 1):", kaiser_cutoff, "components\n")
 cat("Method 3 (Jolliffe, λ > 0.7):", jolliffe_cutoff, "components\n")
 ```
 
-```{r scree-plot, fig.cap="Scree plot shows the 'elbow' where eigenvalues stabilize"}
+```{r scree-plot, fig.cap=c("Eigenvalues with Kaiser (1) and Jolliffe (0.7) reference lines", "Individual and cumulative variance, with the 80% reference threshold")}
 # Create scree plot
 variance_df <- data.frame(
   Component = 1:p,
@@ -564,14 +497,14 @@ variance_df <- data.frame(
 )
 
 scree_plot <- ggplot(variance_df, aes(x = Component, y = Eigenvalue)) +
-  geom_line(color = "blue", size = 1) +
+  geom_line(color = "blue", linewidth = 1) +
   geom_point(color = "blue", size = 3) +
-  geom_hline(yintercept = 1.0, linetype = "dashed", color = "red", label = "Kaiser's Cutoff") +
-  geom_hline(yintercept = 0.7, linetype = "dotted", color = "green", label = "Jolliffe's Cutoff") +
+  geom_hline(yintercept = 1.0, linetype = "dashed", color = "red") +
+  geom_hline(yintercept = 0.7, linetype = "dotted", color = "green") +
   labs(
     title = "Scree Plot: Finding the Elbow",
     x = "Principal Component",
-    y = "Eigenvalue (λ)"
+    y = "Eigenvalue (lambda)"
   ) +
   scale_x_continuous(breaks = 1:p) +
   theme_minimal()
@@ -581,7 +514,7 @@ print(scree_plot)
 # Cumulative variance plot
 cumulative_plot <- ggplot(variance_df, aes(x = Component, y = Variance)) +
   geom_bar(stat = "identity", fill = "steelblue", alpha = 0.8) +  # Barras azules
-  geom_line(aes(y = Cumulative), color = "red", size = 1) +      # Línea roja acumulada
+  geom_line(aes(y = Cumulative), color = "red", linewidth = 1) +      # Línea roja acumulada
   geom_point(aes(y = Cumulative), color = "red", size = 2) +     # Puntos rojos
   geom_hline(yintercept = 0.80, linetype = "dashed", color = "black") +
   annotate("text", x = 2, y = 0.80, label = "80% Target", vjust = -0.5) +
@@ -598,7 +531,7 @@ cumulative_plot <- ggplot(variance_df, aes(x = Component, y = Variance)) +
 print(cumulative_plot)
 ```
 
-**Consensus:** All methods point to **4 components** as optimal. This captures +85% of the variance while remaining interpretable.
+The 80% threshold retains `r cutoff_80` components, Kaiser retains `r kaiser_cutoff`, and Jolliffe retains `r jolliffe_cutoff`. These are descriptive rules, not proofs of an optimal dimension.
 
 ---
 
@@ -611,18 +544,13 @@ Now for the moment of truth: Does PCA actually separate meaningful groups in our
 pca_scores_df <- as.data.frame(pca_result$x)
 
 # Get labels (must match the exact same rows)
-df_labels_clean <- df_selected %>%
-  select(
-    disposition, large_planet, hot_star, insolation_class, magnitude_class,
-    all_of(pca_vars)
-  ) %>%
-  na.omit()
+df_labels_clean <- df_selected[pca_rows, ]
+stopifnot(nrow(pca_scores_df) == nrow(df_labels_clean))
 
-# Combine
 plot_df <- cbind(pca_scores_df, df_labels_clean)
 ```
 
-```{r pc1-v-pc2-pc3-scatter, fig.cap="PC1 vs PC2 vs PC3 colored by KOI disposition", message=FALSE, warning=FALSE}
+```{r pc1-v-pc2-pc3-scatter, fig.cap="PCA scores coloured by KOI disposition", message=FALSE, warning=FALSE}
 library(plotly)
 library(htmlwidgets)
 library(webshot2)
@@ -636,38 +564,33 @@ pca_3d_cloud <- plot_ly(
   marker = list(size = 1.5, opacity = 0.3, line = list(width = 0))
 ) %>%
   layout(
-    title = "PCA 3D Group Density",
+    title = "PCA Scores by KOI Disposition",
     scene = list(
-      xaxis = list(title = "PC1 - Stellar Scale"),
-      yaxis = list(title = "PC2 - Orbital Distance"),
-      zaxis = list(title = "PC3 - Planet Size")
+      camera = list(eye = list(x = 1.65, y = 1.65, z = 1.65)),
+      xaxis = list(title = "PC1"),
+      yaxis = list(title = "PC2"),
+      zaxis = list(title = "PC3")
     ),
     legend = list(title = list(text = "KOI Disposition"))
   )
 
 # 2. Save paths (Save locally to project folder, NOT tempdir)
 # This prevents permission issues and makes debugging easier
-html_file <- "temp_pca_3d.html"
-png_file  <- "pca_3d_static.png"
+if (knitr::is_html_output()) {
+  pca_3d_cloud
+} else {
+  print(ggplot(plot_df, aes(PC1, PC2, colour = disposition)) +
+          geom_point(alpha = 0.3, size = 0.4) + theme_minimal() +
+          labs(title = "PCA scores: PC1 and PC2"))
+}
 
-saveWidget(pca_3d_cloud, html_file, selfcontained = TRUE)
-
-# 3. Screenshot with longer delay
-# We increase delay to 5 seconds to allow WebGL to initialize
-webshot2::webshot(
-  html_file,
-  file = png_file,
-  vwidth = 1000,
-  vheight = 800,
-  delay = 5  
-)
 ```
 
 The plot shows overlap, but let's apply a **statistical test** to ask: Are the groups really different?
 
 ---
 
-# Section 11: Statistical Proof—The Kruskal-Wallis Test
+# Section 11: Exploratory Comparisons—The Kruskal-Wallis Test
 
 ```{r kruskal-wallis-tests}
 # Test if groups differ significantly in PC space
@@ -681,6 +604,9 @@ cat("\nKruskal-Wallis Test - PC2 by Disposition:\n")
 print(pc2_test)
 cat("\nKruskal-Wallis Test - PC3 by Disposition:\n")
 print(pc3_test)
+cat("Holm-adjusted p-values for the three disposition comparisons:\n")
+print(p.adjust(c(PC1=pc1_test$p.value, PC2=pc2_test$p.value, PC3=pc3_test$p.value), method="holm"))
+
 ```
 
 **The Result:** Small p-values provide evidence that score distributions differ
@@ -693,7 +619,7 @@ loading magnitudes.
 # Section 12: The Loadings Plot—Visualizing Component Meanings
 
 ```{r loadings-biplot, fig.cap="Each arrow shows how original variables contribute to the new PCA axes"}
-loadings_df <- as.data.frame(pca_result$rotation) %>%
+loadings_df <- as.data.frame(sweep(pca_result$rotation, 2, pca_result$sdev, "*")) %>%
   rownames_to_column(var = "Variable")
 
 loadings_arrow_plot <- ggplot(loadings_df, aes(x = PC1, y = PC2, label = Variable)) +
@@ -711,7 +637,7 @@ loadings_arrow_plot <- ggplot(loadings_df, aes(x = PC1, y = PC2, label = Variabl
   ) +
   coord_fixed(ratio = 1) +
   labs(
-    title = "PCA Loadings Plot",
+    title = "Variable-PC Correlation Circle",
     subtitle = "How original variables project onto PC1 and PC2",
     x = "PC1 - Stellar Scale",
     y = "PC2 - Orbital Dynamics"
@@ -721,21 +647,15 @@ loadings_arrow_plot <- ggplot(loadings_df, aes(x = PC1, y = PC2, label = Variabl
 print(loadings_arrow_plot)
 ```
 
-**Key Insights:**
-- **Top-right**: Stellar properties (`mass_sun`, `radius_sun`) point right (large stars)
-- **Top**: Orbital properties (`period_days`, `duration_hours`) point up (wide orbits)
-- **Bottom-left**: `insolation` points down-left (close, hot planets around small stars)
-- **The 90-degree angle** reflects PCA orthogonality. It shows zero linear
-  correlation of these score directions in this sample, not physical or
-  statistical independence.
+Arrow coordinates are correlations between each standardized variable and the PC scores. Angles in a two-dimensional projection only approximate relationships when both variables are well represented there. Orthogonality of PC scores does not establish independence of physical phenomena.
 
 ---
 
-# Section 13: Validating Components Against Domain Knowledge
+# Section 13: Comparing Components with Input-Derived Groups
 
-Do our PCA axes capture real astrophysical phenomena? Let's test using ridge plots.
+Ridge plots describe score distributions across groups derived from the analysis inputs.
 
-```{r ridge-plot-hot-star, fig.cap="PC1 strongly separates hot from cool stars; PC2 shows minimal separation"}
+```{r ridge-plot-hot-star, fig.cap="PC-score distributions by input-derived temperature group"}
 # Prepare data for ridge plots
 plot_df$hot_star_label <- factor(plot_df$hot_star,
                                   levels = c(0, 1),
@@ -765,9 +685,9 @@ ridge_plot_hot <- ggplot(plot_df_long, aes(x = Score, y = hot_star_label, fill =
 print(ridge_plot_hot)
 ```
 
-**Observation:** PC1 clearly separates hot from cool stars (peaks are offset). PC2-PC4 show much less separation. This confirms our interpretation: **PC1 is the stellar temperature/size axis.**
+The ridge plots describe associations with temperature groups constructed from a PCA input. They do not independently validate the components.
 
-```{r ridge-plot-insolation, fig.cap="PCA components capture planetary energy environment across multiple dimensions"}
+```{r ridge-plot-insolation, fig.cap="PC-score distributions by input-derived insolation group"}
 plot_df_long_insol <- plot_df %>%
   select(PC1, PC2, PC3, PC4, insolation_class) %>%
   mutate(insolation_class = factor(insolation_class, levels = c("low", "medium", "high"))) %>%
@@ -793,11 +713,11 @@ ridge_plot_insol <- ggplot(plot_df_long_insol, aes(x = Score, y = insolation_cla
 print(ridge_plot_insol)
 ```
 
-**Striking Result:** All four components show clear separation by insolation. **Planetary energy is not a simple one-dimensional problem—it's encoded across the full PC space.** This makes sense: to have high insolation, you need either a hot star (PC1) or a close orbit (PC2), or both.
+Insolation groups also reuse a PCA input. Their score distributions describe this sample and should be interpreted alongside the loadings.
 
 ---
 
-# Section 14: Comprehensive Statistical Validation
+# Section 14: Exploratory Distribution Comparisons
 
 Let's run the Kruskal-Wallis test for all our domain-knowledge variables against all 4 components.
 
@@ -820,7 +740,8 @@ all_tests_summary <- all_combinations %>%
   ) %>%
   ungroup() %>%
   unnest(test_result) %>%
-  select(Variable_Group, Component, p.value)
+  select(Variable_Group, Component, p.value) %>%
+  mutate(p.value = p.adjust(p.value, method = "holm"))
 
 # Create summary table
 final_p_value_table <- all_tests_summary %>%
@@ -831,46 +752,18 @@ final_p_value_table <- all_tests_summary %>%
   ) %>%
   select(Variable_Group, PC1, PC2, PC3, PC4)
 
-knitr::kable(final_p_value_table, caption = "P-values from Kruskal-Wallis Tests (Lower = More Significant)")
+knitr::kable(final_p_value_table, caption = "Holm-adjusted p-values for 16 exploratory Kruskal-Wallis comparisons")
 ```
 
-### Interpreting the Results
+## Interpreting the Results
 
-**Key Findings:**
-
-1. **`hot_star`**: Significant on PC1 (p < 1e-100), PC2 (p ≈ 3.3e-05), PC3 (p ≈ 2.0e-23), and PC4 (p < 1e-100). Stellar temperature correlates across all principal components, affecting both stellar properties and orbital characteristics.
-
-2. **`insolation_class`**: Universally significant (p < 1e-100). Energy reception is the most fundamental axis of variation in the exoplanet population.
-
-3. **`large_planet`**: Significant on PC1, PC2, and PC3 (p < 1e-100), and PC4 (p ≈ 4.0e-14). Planet size correlates strongly with multiple aspects of the system.
-
-4. **`magnitude_class`**: Significant on PC1 (p < 1e-100), PC3 (p < 1e-100), and PC4 (p ≈ 4.0e-30), but NOT on PC2 (p = 0.11). This is elegant confirmation that:
- - PC1 captures stellar brightness and size effects
- - PC2 is independent of apparent magnitude—it represents
-   pure orbital dynamics free from observational biases
- - PC3 relates to transit depth and detection efficiency
- - PC4 separates stellar evolutionary stages
+The displayed p-values use Holm correction across all 16 comparisons. Small values indicate sample distribution differences, not separability or unbiased discovery. Derived groups reuse PCA inputs, and multiple KOIs can share a host star, so standard independent-observation p-values are descriptive approximations. A nonsignificant result does not prove independence.
 
 ---
 
 # Conclusion
 
-This exploratory analysis represents the versioned dataset in a lower-dimensional
-orthogonal space. Component labels are interpretations of loadings, not proven
-physical identities:
-
-1. **PC1 = Stellar Scale**: A spectrum from massive, hot stars to small, cool dwarfs
-2. **PC2 = Orbital Distance**: A spectrum from close-orbiting planets to distant, slow-moving worlds
-3. **PC3 = Planet Size**: A measure of transit depth and planetary radius
-4. **PC4 = Stellar Evolution**: A secondary axis capturing evolutionary stage
-
-Before PCA, we had 10 correlated variables describing exoplanet systems. Now we have 4 **uncorrelated** components with clear physical meanings. We've:
-
-- **Reduced dimensionality** from 10 to 4 (60% reduction)
-- **Explained +85% of variance** with just 4 components
-- **Constructed orthogonal components** under the PCA transformation
-- **Described associations** with labels derived from the input variables
-- **Reported distributional differences**, not a held-out separability result
+This report applies PCA to ten standardized inputs after log10(x+1) transformation of eight positive-scale variables. The first four PCs retain `r round(sum(pca_result$sdev[1:4]^2)/sum(pca_result$sdev^2)*100, 1)`% of variance. Loadings, score plots and derived groups describe this snapshot; they do not prove physical independence, classification accuracy or stellar evolutionary stages.
 
 ---
 
@@ -879,14 +772,16 @@ Before PCA, we had 10 correlated variables describing exoplanet systems. Now we 
 ## Session Information
 
 ```{r session-info}
-sessionInfo()
+session_lines <- capture.output(sessionInfo())
+cat(paste(vapply(session_lines, function(line) paste(strwrap(line, width=78), collapse="\n"), character(1)), collapse="\n"))
 ```
 
 ## Complete Code Summary
 
-This QMD file contains fully executable R code. All code chunks are toggled with `code-fold: true`, meaning you can view or hide the code as desired.
+This QMD file contains fully executable R code. In the HTML version, `code-fold: true` lets you view or hide the code.
 
 Key libraries used:
+
 - `tidyverse`: Data manipulation and visualization
 - `ggplot2`: Advanced plotting
 - `ggcorrplot`: Correlation heatmaps
@@ -899,5 +794,5 @@ Key libraries used:
 
 **Created:** `r Sys.Date()`
 
-**Analysis Purpose:** Dimensionality reduction and interpretation of exoplanet discovery data using Principal Component Analysis with full methodological validation.
+**Analysis Purpose:** Dimensionality reduction and interpretation of exoplanet discovery data using Principal Component Analysis with explicit exploratory limitations.
 

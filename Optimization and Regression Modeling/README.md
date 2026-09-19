@@ -1,18 +1,20 @@
 # Optimization and Regression Modelling
 
-## Repository Overview
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md)
 
-This repository contains a collection of advanced optimization and data analysis projects, developed as part of the Optimization and Decision Analytics coursework for the Master on Statistics for Data Science at UC3M.
+## Overview
 
-The projects serve as practical, hands-on applications of mathematical optimization techniques, demonstrating how to model and solve complex problems using Python and the Gurobi Optimizer. The repository is divided into two main areas:
+These projects were developed for Optimization and Decision Analytics coursework in the Master's in Statistics for Data Science at UC3M.
 
-- **Linear Programming (LP):** Explores classic LP problems, including resource allocation and a unique formulation of a regression problem (Mean Absolute Error) as a linear program.
+The projects serve as practical, hands-on applications of mathematical optimization techniques, demonstrating how to model and solve complex problems using Python and the Gurobi Optimizer. The project is divided into two main areas:
+
+- **Linear Programming (LP):** Explores classic LP problems, including resource allocation and a formulation of a regression problem (Mean Absolute Error) as a linear program.
 - **Mixed Integer Linear Programming (MILP):** Tackles a more complex production planning problem involving fixed costs, logical constraints, and piecewise linear profit functions, which require integer and binary variables to model.
 
-## Repository Structure
+## Project Structure
 
 ```
-Optimization-and-Regression-Modelling/
+Optimization and Regression Modeling/
 ├── README.md                 <-- (You are here)
 │
 ├── Linear Programming/
@@ -22,6 +24,7 @@ Optimization-and-Regression-Modelling/
 └── Mixed Integer Linear Programming/
     ├── Problem Statement 2.pdf   <-- (Academic prompt for the MILP problem)
     ├── Jupyter_resolution_report.ipynb <-- (Gurobi-Python model, data analysis, & plotting)
+    ├── report-format.yml         <-- (PDF rendering settings)
     └── Report.pdf                <-- (Formal write-up with managerial insights)
 ```
 
@@ -29,7 +32,7 @@ Optimization-and-Regression-Modelling/
 
 ## Project 1: Linear Programming & MAE Regression
 
-**Folder:** Linear Programming/
+**Folder:** [Linear Programming](Linear%20Programming/)
 
 This project folder contains the solution to a two-part problem set, both solved using Linear Programming techniques.
 
@@ -59,12 +62,12 @@ This project folder contains the solution to a two-part problem set, both solved
 
 **Model (The "LP" Twist):** Instead of using a traditional Ordinary Least Squares (OLS) approach (which minimizes the sum of squared errors), this problem is solved using the **Mean Absolute Error (MAE)** criterion.
 
-**Approach:** 
+**Approach:**
 - Minimize the sum of absolute deviations between predicted and actual values
 - Introduce non-negative continuous positive/negative deviation variables
 - Reformulate the absolute value objective as a linear function
 
-**Key Advantage:** This formulation is **more robust to outliers** than OLS regression because it uses absolute deviations instead of squared deviations.
+**Key Advantage:** This formulation is less sensitive to large response residuals than squared loss; it does not protect against all high-leverage predictor outliers.
 
 **Implementation:** The Jupyter_resolution.ipynb notebook:
 1. Builds the LP model to find optimal regression coefficients
@@ -79,9 +82,9 @@ This project folder contains the solution to a two-part problem set, both solved
 
 ## Project 2: Production Planning (MILP)
 
-**Folder:** Mixed Integer Linear Programming/
+**Folder:** [Mixed Integer Linear Programming](Mixed%20Integer%20Linear%20Programming/)
 
-This project addresses a complex, real-world production planning scenario for a company manufacturing three discrete products. The problem requires a Mixed Integer Linear Programming (MILP) model due to its business rules.
+This project addresses an academic production planning scenario for a company manufacturing three discrete products. The problem requires a Mixed Integer Linear Programming (MILP) model due to its business rules.
 
 **Problem:** Determine the optimal production quantity for three products to maximize total profit, subject to constraints on four resources, production capacity limits, and complex business rules.
 
@@ -95,8 +98,8 @@ A fixed cost is incurred only if a product is manufactured. Binary variables (`y
 
 ### Big-M Constraints
 
-Links binary production decisions to continuous quantity variables:
-- `production_j ≤ capacity × y_j`
+Links binary decisions to integer production quantities:
+- `y_j ≤ production_j ≤ capacity × y_j`
 - Ensures production only occurs when the binary variable is activated
 
 ### Logical Business Rules
@@ -108,14 +111,14 @@ The model enforces: *"If product 3 is produced, then product 1 must also be prod
 
 Products have declining marginal profits (e.g., first 10 units earn €4/unit, remaining units earn €3/unit):
 - Production is split into segments with different profit rates
-- Sequential filling logic ensures lower-cost segments are used first
+- Sequential filling logic ensures higher-profit segments are used first
 - Segments can only be activated if all previous segments are full
 
 **Implementation & Analysis:** The Gurobi model balances all complex constraints to find the globally optimal production plan.
 
 **Key Findings (from Report.pdf):**
 
-- **Optimal Production Plan:** Produce Products 1 and 2; do not produce Product 3
+- **Optimal Production Plan:** Produce 36 units of Product 1 and 60 of Product 2; none of Product 3
 - **Maximum Profit:** €284 net profit
 - **Near-bottleneck:** Resource 4 uses 1,188 of 1,200 units (99.0%).
 - **Managerial Recommendation:** Evaluate integer re-optimizations under
@@ -132,7 +135,7 @@ Products have declining marginal profits (e.g., first 10 units earn €4/unit, r
 
 | Technology | Purpose |
 |---|---|
-| **Python 3.9+** | Core programming language |
+| **Python 3.12** | Tested Python environment |
 | **Gurobi Optimizer** | High-performance commercial LP/MILP solver |
 | **Jupyter Notebook** | Interactive code development and analysis |
 | **Plotly** | Interactive 3D regression plane visualization |
@@ -146,34 +149,47 @@ Products have declining marginal profits (e.g., first 10 units earn €4/unit, r
 ### Clone the repository:
 
 ```bash
-git clone https://github.com/your-username/Optimization-and-Regression-Modelling.git
-cd Optimization-and-Regression-Modelling
+git clone https://github.com/aleetreny/Data-Science-Ecosystem.git
+cd "Data-Science-Ecosystem/Optimization and Regression Modeling"
 ```
 
 ### Install Dependencies:
 
 This project requires a working Python environment.
 
-The primary dependency is **gurobipy**. Gurobi is a commercial product but offers a **free academic license** for students and researchers. You must have a valid Gurobi license installed on your machine to run the notebooks.
-
-Other packages can be installed via pip:
-
-```bash
-pip install jupyterlab pandas numpy plotly matplotlib
-```
+Use the shared [Python environment](../RUNNING.md), including **gurobipy**. These small models ran with the installed size-limited Gurobi license; other installations must provide a license that covers the model size and intended use.
 
 ### Run the Notebooks:
 
-Launch Jupyter:
+After creating the shared environment and registering its kernel, execute both notebooks from this directory:
 
 ```bash
-jupyter lab
+../.venv/bin/jupyter nbconvert --to notebook --execute --inplace \
+  --ExecutePreprocessor.kernel_name=data-science-ecosystem \
+  --ExecutePreprocessor.timeout=3600 \
+  "Linear Programming/Jupyter_resolution.ipynb" \
+  "Mixed Integer Linear Programming/Jupyter_resolution_report.ipynb"
 ```
 
-Open either `Jupyter_resolution.ipynb` or `Jupyter_resolution_report.ipynb` to explore the models and run the code.
+You can also open the notebooks in an editor with Jupyter support. A separate JupyterLab or Notebook interface is optional.
+
+The resource-allocation LP has objective `660/13` (about 50.76923). The fitted
+absolute-error regression has total absolute error 5.3497 and mean absolute
+error 0.8916 over its six observations. Those are in-sample fitting errors.
+
+After executing the MILP notebook, regenerate its report from that same source:
+
+```bash
+cd "Mixed Integer Linear Programming"
+quarto render Jupyter_resolution_report.ipynb --to pdf \
+  --metadata-file report-format.yml --output Report.pdf
+```
+
+The PDF needs Quarto and XeLaTeX. The original course problem statements are
+preserved as supplied.
 
 ---
 
-## Disclaimer
+## Source material
 
-This repository contains academic project work. The problem statements and data are provided by the course instructors at UC3M.
+This folder contains academic project work. The problem statements and data are provided by the course instructors at UC3M.

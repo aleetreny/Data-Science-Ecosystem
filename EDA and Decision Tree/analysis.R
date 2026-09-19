@@ -17,8 +17,7 @@ required_packages <- c(
 
 for (pkg in required_packages) {
   if (!pkg %in% installed.packages()[, "Package"]) {
-    cat(paste("Missing package:", pkg, "Installing!\n"))
-    install.packages(pkg, dependencies = TRUE)
+    stop(paste("Missing package:", pkg, "- install the packages listed in README.md before running."))
   }
   library(pkg, character.only = TRUE)
 }
@@ -49,7 +48,7 @@ summary(student_data)
 sum(is.na(student_data))
 
 # ============================================================================
-# Question 1: How does the maximum parental education level influence mean final grade (G3)?
+# Question 1: How is maximum parental education associated with mean final grade (G3)?
 # Visualization: Bar Chart
 # ============================================================================
 
@@ -75,12 +74,12 @@ p1 <- ggplot(parent_edu_summary,
                 label = sprintf("%.2f", mean_G3)),
             vjust = 0, size = 3.5) +
   labs(
-    title = "Impact of Maximum Parental Education\non Student Final Grade",
+    title = "Maximum Parental Education and\non Student Final Grade",
     subtitle = NULL,
     x = "Maximum Parental Education Level",
     y = "Mean Final Grade (G3)"
   ) +
-  scale_x_discrete(labels = c("4th grade", "5-9th grade", "Secondary", "Higher education")) +
+  scale_x_discrete(labels = c("0"="None", "1"="4th grade", "2"="5-9th grade", "3"="Secondary", "4"="Higher education")) +
   scale_fill_brewer(palette = "Blues") +
   scale_y_continuous(expand = expansion(mult = c(0, 0.08))) +
   coord_cartesian(clip = "off") +
@@ -122,7 +121,7 @@ p2 <- ggplot(df_di, aes(pass_margin)) +
     name = NULL
   ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
-  labs(title = "Histogram: Distance to Pass Threshold (G3 − 10)",
+  labs(title = "Histogram: Distance to Pass Threshold (G3 - 10)",
        subtitle = subtxt, x = "Points above/below pass", y = "Count") +
   scale_x_continuous(breaks = seq(floor(min(df_di$pass_margin)), ceiling(max(df_di$pass_margin)), 2)) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.06))) +
@@ -174,7 +173,9 @@ print(p3)
 # Visualization: Scatter Plot with regression line
 # ============================================================================
 
-subtxt_q4 <- "Low Risk (0 Failures): 312 (79.0%) | High Risk (1+ Failures): 83 (21.0%)"
+subtxt_q4 <- sprintf("0 past failures: %d (%.1f%%) | 1+ past failures: %d (%.1f%%)",
+  sum(student_data$failures == 0), 100*mean(student_data$failures == 0),
+  sum(student_data$failures > 0), 100*mean(student_data$failures > 0))
 
 p4 <- student_data %>%
   dplyr::mutate(
@@ -244,7 +245,7 @@ cor_with_g3_filtered <- cor_with_g3 %>%
 # 6. We use reorder(variable, correlation) to sort the bars
 # from lowest to highest.
 ggplot(cor_with_g3_filtered, aes(x = correlation, y = reorder(variable, correlation), color = type)) +
-  geom_segment(aes(x = 0, yend = variable, xend = correlation, yend = reorder(variable, correlation)),
+  geom_segment(aes(x = 0, xend = correlation, yend = reorder(variable, correlation)),
                linewidth = 1.2) +
   geom_point(size = 4) +
   
@@ -345,7 +346,7 @@ plot(tuned_tree_model) # Plot shows how ROC changes with complexity (cp)
 # to the optimal 'cp' value found during cross-validation.
 final_tree <- tuned_tree_model$finalModel
 
-rpart.plot(final_tree, main = "Decision Tree: Predicting High Performance (G3 ≥ 10)",
+rpart.plot(final_tree, main = "Decision Tree: Predicting Passing (G3 >= 10)",
            extra = 104, box.palette = "RdYlGn", branch.lty = 3,
            shadow.col = "gray85", nn = TRUE, split.yshift = -1, split.yspace = 2)
 
@@ -395,3 +396,9 @@ print("--- Summary Performance Metrics Table ---")
 kable(metrics_table, 
       digits = 4, 
       caption = "Key Model Performance Metrics (Test Set)")
+
+# Compare with the majority-class rule fixed using training data.
+majority_class <- names(which.max(table(train_data$high_performance)))
+baseline_accuracy <- mean(test_data$high_performance == majority_class)
+cat("Test majority-class baseline accuracy:", baseline_accuracy, "\n")
+cat("Test accuracy minus baseline:", matrix_report$overall["Accuracy"] - baseline_accuracy, "\n")

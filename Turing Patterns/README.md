@@ -1,6 +1,8 @@
 # Gray-Scott Reaction-Diffusion Simulation
 
-A numerical laboratory exploring **Turing Patterns** via the Gray-Scott reaction-diffusion model. This project simulates two chemical species interacting on a 2D grid to produce complex, emergent biological patterns like spots, stripes, and cells.
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md) · [Notebook](simulation.ipynb)
+
+A numerical laboratory exploring **Turing Patterns** via the Gray-Scott reaction-diffusion model. This project simulates two chemical species interacting on a 2D grid to produce spatial patterns like spots, stripes, and cells.
 
 ## How it Works
 
@@ -15,12 +17,19 @@ $$
 $$
 
 Where:
+
 - **Diffusion:** $D_A, D_B$ (Spread of chemicals across the grid)
 - **Reaction:** $AB^2$ (Non-linear feedback loop)
 - **Feed/Kill:** $f$ feeds substance A, and $k$ removes substance B.
 
 ## Features
 
-- **Vectorized Implementation:** Uses `NumPy` array operations instead of slow Python loops for high performance.
-- **Periodic Boundaries:** The grid wraps around the edges (toroidal topology) to prevent edge artifacts.
-- **Real-time Visualization:** Uses `Matplotlib` to render the evolution of the pattern dynamically.
+- **Vectorized Implementation:** Uses `NumPy` array operations to update all grid cells within each time step.
+- **Periodic Boundaries:** The grid wraps around the edges (toroidal topology) to model a periodic domain.
+- **Snapshot Animation:** Uses `Matplotlib` to animate saved states after the simulation completes.
+
+## Running and numerical checks
+
+Use the [shared Python environment](../RUNNING.md) and execute [simulation.ipynb](simulation.ipynb) from this directory. The code names the two species `U` and `V`; it generates its initial state locally and runs 10,000 steps on a 200 × 200 grid, saving 21 states including the initial one.
+
+The implementation checks the periodic Laplacian and rejects nonfinite or invalid concentration updates instead of concealing them with clipping. Its successful run applies to the documented grid, time step and parameters; changing them requires checking numerical stability again.

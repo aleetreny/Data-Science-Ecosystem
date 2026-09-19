@@ -41,9 +41,8 @@ library(scales)
 # Source: NASA Exoplanet Archive (Kepler Candidate Columns)
 
 
-# The original data set had 153 variables and 8054 observations. To reduce the complexity 
-# and allow for a more interpretable PCA analysis, we select the more interesting 14 variables
-# and we conduct a sample reduction.
+# Select fourteen columns (including identifiers and labels) from the
+# 8,054-row snapshot, then sample 1,000 complete cases for mixed-data MDS.
 
 # The selected variables are the following:
 
@@ -59,7 +58,7 @@ library(scales)
 
 # --- Vetting and False Positive Flags ---
 # koi_fpflag_nt    # Not Transit-Like Flag [Unit: None] (Scale: Binary - 0 or 1)
-# koi_fpflag_ss    # Stellar-Stochastic Flag [Unit: None] (Scale: Binary - 0 or 1)
+# koi_fpflag_ss    # Stellar Eclipse Flag [Unit: None] (Scale: Binary - 0 or 1)
 
 # --- Transit / Orbital Parameters (Observed) ---
 # koi_period       # Orbital Period [Unit: days] (Scale: Continuous (Ratio))
@@ -90,13 +89,13 @@ df_koi <- read.csv("df_koi.csv")
 # Select and rename the relevant columns
 df_selected = df_koi %>%
   dplyr::select(
-    kepid,            # Kepler ID (Unique identifier)
+    kepid,            # Kepler ID (Target-star identifier; multiple KOIs can share it)
     koi_disposition,  # KOI Disposition (Candidate, Confirmed, False Positive)
     koi_fpflag_nt,    # Not Transit-Like (False positive flag)
-    koi_fpflag_ss,    # Stellar-Stochastic (False positive flag)
+    koi_fpflag_ss,    # Stellar Eclipse (False positive flag)
     koi_period,       # Orbital Period (days)
     koi_duration,     # Transit Duration (hours)
-    koi_depth,        # Transit Depth (percentage)
+    koi_depth,        # Transit Depth (ppm)
     koi_prad,         # Planetary Radius (Earth radii)
     koi_insol,        # Insolation Flux (light received by planet)
     koi_steff,        # Stellar Effective Temperature (Kelvin)
@@ -149,16 +148,7 @@ df_clean <- df_selected %>%
     # Justification: This is a deliberate, *astrophysically-informed* choice,
     # not a statistical one (like using the median).
     #
-    # In exoplanet science, a radius of 4 Earth-radii (4 R⊕) is a critical
-    # dividing line. It's the approximate boundary separating smaller "Super-Earths"
-    # (which are likely rocky or water-worlds) from "Neptune-sized" gas giants.
-    #
-    # Planets > 4 R⊕ are almost certain to have a significant gas envelope,
-    # making them fundamentally different in composition and formation.
-    # Using a statistical median here would be physically meaningless, as it
-    # would depend only on the dataset's specific distribution, not on the
-    # underlying physics of planet formation.
-    
+    # A descriptive radius threshold of 4 Earth radii; it does not identify composition.
     large_planet = if_else(radius_earth > 4, 1, 0),
     
     # --- 3. Statistical Multi-Class Discretization (Terciles) ---
@@ -171,56 +161,26 @@ df_clean <- df_selected %>%
     # to insolation.
     
     insolation_class = case_when(
+      is.na(insolation) ~ NA_character_,
       insolation < quantile(insolation, 0.33, na.rm = TRUE) ~ "low",
       insolation < quantile(insolation, 0.66, na.rm = TRUE) ~ "medium",
       TRUE ~ "high"
     ),
     
-    # --- 4. Statistical Multi-Class Discretization (Terciles) ---
-    #
-    # We bin 'magnitude' (brightness) into three equal-count groups.
-    # Note: Magnitude is an inverse scale; smaller numbers are brighter.
-    # Justification: This captures observational bias. 'bright' stars are
-    # easier to observe with higher signal-to-noise than 'dim' stars.
-    # Separating them allows the model to potentially account for
-    # different data quality levels or selection biases.
+# Magnitude groups describe brightness; they do not correct selection bias.
     
     magnitude_class = case_when(
+      is.na(magnitude) ~ NA_character_,
       magnitude < quantile(magnitude, 0.33, na.rm = TRUE) ~ "bright", # < 33rd percentile is brightest
       magnitude < quantile(magnitude, 0.66, na.rm = TRUE) ~ "medium",
       TRUE ~ "dim"                                      # > 66th percentile is dimmest
     ),
 
     # --- 5. Domain-Knowledge Binary Grouping of Disposition ---
-    # In the previous PCA analysis (Task 1), we observed a significant overlap 
-    # between the 'CONFIRMED' and 'CANDIDATE' classes in the principal component space.
-    #
-    # 1. Statistical Justification: 
-    #    The geometric structure of 'CANDIDATE' objects is nearly indistinguishable 
-    #    from 'CONFIRMED' planets. This suggests that, in terms of the observed 
-    #    variables (Period, Radius, Temperature, etc.), they belong to the same 
-    #    cluster of "planet-like" objects.
-    #
-    # 2. Physical/Domain Justification:
-    #    - A 'CANDIDATE' is a signal that passes all tests for being a planet but 
-    #      has not yet been validated by follow-up observations.
-    #    - A 'FALSE POSITIVE' typically represents instrumental noise or binary star 
-    #      systems (non-planetary phenomena).
-    #
-    # 3. Visualization Justification:
-    #    To improve the interpretability of the MDS map, we simplify the 
-    #    classification into a binary problem: "Signal (Planet)" vs. "Noise".
-    #    This reduces visual clutter and allows us to clearly assess if the 
-    #    Joint Metric (RelMS) successfully separates astrophysical objects 
-    #    from artifacts/noise.
-    #
-    # Therefore, we create the variable 'binary_disposition':
-    # - Group: 'CONFIRMED' + 'CANDIDATE' -> "Planet"
-    # - Group: 'FALSE POSITIVE'          -> "False Positive"
-      
+    # Combined plotting label only; candidates are not confirmed planets.
     binary_disposition = case_when(
       disposition == "FALSE POSITIVE" ~ "False Positive",
-      TRUE ~ "Planet"
+      TRUE ~ "Confirmed/Candidate"
     )
   )
 
@@ -306,10 +266,9 @@ corr_plot <- ggcorrplot(
 
 print(corr_plot)
 
-# "The heatmap reveals strong correlations (e.g., r > 0.7) between several variables.
-# Therefore, using simple Euclidean distance would inflate the importance of 
-# these redundant features. This justifies the use of Robust Mahalanobis distance, 
-# which accounts for this covariance structure."
+# Robust Mahalanobis distance uses estimated covariance to weight the
+# quantitative block. This is one modeling choice; correlations alone do
+# not establish that it is superior to alternative distances.
 
 # --- Labels/Ground Truth ---
 # We keep this separate for visualization, not for distance calculation
@@ -338,6 +297,7 @@ S_robust_inv <- solve(rob_est$cov) # Invert the covariance matrix
 calc_pairwise_mahal_sq <- function(data_matrix, S_inv) {
   n <- nrow(data_matrix)
   D2 <- matrix(0, nrow = n, ncol = n)
+  if (n < 2L) return(D2)
   
   # Nested loop is efficient enough for N=1000
   for (i in 1:(n-1)) {
@@ -386,28 +346,9 @@ mean(D2_bin_sq)
 mean(D3_cat_sq)
 
 
-# 1. OBSERVED DISPARITY:
-#    We observe a massive scale difference between the distance matrices:
-#    - D1 (Quantitative, Robust Mahalanobis): Mean ~ 857, Max ~ 109,578.
-#      This distance is unbounded and depends on the covariance structure.
-#    - D2 (Binary) and D3 (Categorical): Mean < 1, Max = 1.
-#      These are strictly bounded between [0, 1] as they are derived from
-#      similarity coefficients.
-#
-# 2. THE PROBLEM (Why we cannot just add them):
-#    If we constructed a joint metric now by simply summing these matrices
-#    (e.g., D_total = D1 + D2 + D3), the Quantitative structure (D1) would
-#    completely dominate the result (contributing >99.9% of the value).
-#    The information contained in the binary and categorical variables would
-#    be mathematically invisible (noise).
-#
-# 3. THE SOLUTION (Justification for RelMS):
-#    These results empirically justify the mandatory next step:
-#    "Check for commensurability... by imposing equal geometric variability"
-#
-#    We must rescale each matrix D_k by its geometric variability (V_k)
-#    so that all three sources of information contribute equally to the
-#    final Mixed-Data Map.
+# The three distance blocks have different units and scales. Their computed
+# summaries motivate normalizing geometric variability before combination.
+# Equal block variability is a weighting choice, not equal predictive value.
 
 
 # STEP 5.5 : Provee the right choice of distances. -----
@@ -438,13 +379,13 @@ comp_plot <- ggplot(plot_data, aes(x = Euclidean, y = Value)) +
   geom_point(alpha = 0.05, color = "#2c3e50", size = 0.5) +
   
   # Add Identity Line (y=x) or Linear Trend for reference
-  geom_smooth(method = "lm", color = "red", linetype = "dashed", se = FALSE, size = 0.8) +
+  geom_smooth(method = "lm", color = "red", linetype = "dashed", se = FALSE, linewidth = 0.8) +
   
   # Split into panels
   facet_wrap(~ Metric, scales = "free_y") +
   labs(
     title = "Why Robust Mahalanobis? A Geometric Comparison",
-    subtitle = "Left: L1 is just a scaled L2. Right: Mahalanobis fundamentally changes the geometry.",
+    subtitle = "Alternative pairwise distances; L1 and L2 are not generally proportional.",
     x = "Euclidean Distance",
     y = "Alternative Distance"
   ) +
@@ -456,28 +397,9 @@ comp_plot <- ggplot(plot_data, aes(x = Euclidean, y = Value)) +
 
 print(comp_plot)
 
-# 1. THE LINEARITY OF STANDARD METRICS (Left Panel):
-#    The plot comparing Euclidean vs. Manhattan (L1) distances reveals a 
-#    linear relationship (points cluster tightly around a line). This indicates 
-#    that while the absolute scale differs, the relative ordering of distances 
-#    remains largely consistent. Both metrics fundamentally ignore the 
-#    correlation structure of the data, treating dimensions as orthogonal.
-#
-# 2. THE GEOMETRIC SHIFT OF MAHALANOBIS (Right Panel):
-#    The comparison between Robust Mahalanobis and Euclidean distances shows a 
-#    stark, non-linear deviation from the identity line. 
-#    - The "fan" or "cloud" shape indicates that many pairs of points that are 
-#      distant in Euclidean space are actually closer when covariance is 
-#      accounted for (and vice-versa).
-#    - This structural change proves that the strong correlations observed in 
-#      the heatmap (e.g., Star Radius vs. Mass) were biasing the Euclidean 
-#      metric.
-#
-# 3. CONCLUSION:
-#    The robust Mahalanobis distance successfully "corrects" the geometry of 
-#    the quantitative space by normalizing for covariance. This correction is 
-#    essential for RelMS to ensure that physical redundancy does not overpower 
-#    the information from binary and categorical variables.
+# The comparison shows how distance rankings and scales change with the
+# metric. Euclidean and Manhattan distances need not rank pairs identically;
+# Mahalanobis incorporates covariance without establishing physical truth.
 
 
 # Binary : Similarity Comparison
@@ -513,14 +435,14 @@ D2_SM <- 1 - S_SM
 # Distance^2: 1 - S
 # Handle division by zero if (a+b+c) = 0 (identical 0-0 vectors)
 denom_jac <- (a + b_plus_c)
-S_Jac <- ifelse(denom_jac == 0, 0, a / denom_jac) 
+S_Jac <- ifelse(denom_jac == 0, 1, a / denom_jac)
 D2_Jac <- 1 - S_Jac
 
 # --- C. Dice (Sneath-Sokal) ---
 # Similarity: 2a / (2a + b + c)
 # Distance^2: 1 - S
 denom_dice <- (2 * a + b_plus_c)
-S_Dice <- ifelse(denom_dice == 0, 0, (2 * a) / denom_dice)
+S_Dice <- ifelse(denom_dice == 0, 1, (2 * a) / denom_dice)
 D2_Dice <- 1 - S_Dice
 
 # 3. VISUALIZATION 1: HEATMAPS 
@@ -562,12 +484,12 @@ pairs_long <- melt(pairs_df_sorted, id.vars = "Ordered_Index",
                    variable.name = "Metric", value.name = "Distance")
 
 line_plot <- ggplot(pairs_long, aes(x = Ordered_Index, y = Distance, color = Metric, linetype = Metric)) +
-  geom_line(size = 1, alpha = 0.8) +
+  geom_line(linewidth = 1, alpha = 0.8) +
   labs(
     title = "Comparison of Binary Distances (Ordered Profile)",
-    subtitle = "Jaccard/Dice (Dashed) are consistently higher than Sokal (Solid Red).",
+    subtitle = "The distances differ in their treatment of joint absences.",
     x = "Pairs Ordered by Sokal-Michener Distance",
-    y = "Squared Distance Value"
+    y = "Dissimilarity (not squared)"
   ) +
   scale_color_manual(values = c("Sokal_Michener" = "#E41A1C", "Jaccard" = "#377EB8", "Dice" = "#4DAF4A")) +
   theme_minimal() +
@@ -575,42 +497,16 @@ line_plot <- ggplot(pairs_long, aes(x = Ordered_Index, y = Distance, color = Met
 
 print(line_plot)
 
-# 1. VISUAL STRUCTURE (Heatmaps Comparison):
-#    The three heatmaps demonstrate a fundamental difference in how similarity 
-#    is perceived. 
-#    - The Sokal-Michener matrix (Left) appears significantly "lighter" (lower 
-#      distances), indicating that it finds high similarity between many pairs.
-#    - The Jaccard matrix (Center) is "darker" (higher distances).
-#    - REASON: This occurs because the Kepler dataset is sparse; most objects 
-#      lack flags (0). Sokal-Michener counts these shared zeros (0-0) as a 
-#      match, artificially inflating similarity between unrelated objects.
-#
-# 2. DIVERGENCE ANALYSIS:
-#    The line plot provides the definitive proof for metric selection. By ordering 
-#    pairs based on the Sokal-Michener distance (Solid Red Line), we observe:
-#    
-#    - The "Ladder" vs. The "Ceiling": While the Red line steps up gradually, 
-#      the Jaccard (Blue Dashed) and Dice (Green Dashed) lines often jump 
-#      immediately to 1.0 (Maximum Distance).
-#    - The "False Similarity" Gap: The wide gaps between the Red line and the 
-#      others represent pairs of objects that share NO active traits, but share 
-#      many zeros. Sokal-Michener misleadingly classifies them as "close" 
-#      (distance < 0.5), whereas Jaccard correctly identifies them as 
-#      totally distinct (distance = 1.0).
-#
-# 3. CONCLUSION:
-#    In the context of Exoplanet detection, sharing the *absence* of a flag 
-#    (e.g., "Not a False Positive") is the default state and carries little 
-#    information. We are interested in clustering objects based on specific, 
-#    active traits they share. Therefore, Jaccard is the methodologically 
-#    correct choice for the RelMS construction ($D_2$), as it filters out the 
-#    noise of shared zeros.
+# Sokal-Michener includes shared zeros; Jaccard and Dice emphasize active
+# flags. We choose Jaccard for this block and define two all-zero vectors
+# as distance zero. This convention does not imply that shared zeros are
+# uninformative for every scientific question.
 
 
 
 # Categorical: Metric comparison
 
-# Objective: Compare Hamming (SC1) vs Gower's Weighted (SC4) for categorical data.
+# Objective: Compare Hamming (SC1) vs penalized matching (SC4) for categorical data.
 
 
 # 1. PREPARATION: Subset & Calculation
@@ -687,12 +583,12 @@ pairs_cat_long <- melt(pairs_cat_df, id.vars = "Index",
                        variable.name = "Metric", value.name = "Distance")
 
 line_plot_cat <- ggplot(pairs_cat_long, aes(x = Index, y = Distance, color = Metric, linetype = Metric)) +
-  geom_line(size = 1, alpha = 0.8) +
+  geom_line(linewidth = 1, alpha = 0.8) +
   labs(
     title = "Comparison of Categorical Metrics (SC1 vs SC4)",
-    subtitle = "SC4 (Blue) is always higher/stricter than SC1 (Red) for mismatches.",
+    subtitle = "SC4 equals SC1 for full agreement/disagreement and is larger for partial mismatches.",
     x = "Pairs Ordered by Hamming Distance (SC1)",
-    y = "Squared Distance Value"
+    y = "Dissimilarity (not squared)"
   ) +
   scale_color_manual(values = c("SC1" = "#E41A1C", "SC4" = "#377EB8")) +
   theme_minimal() +
@@ -700,27 +596,10 @@ line_plot_cat <- ggplot(pairs_cat_long, aes(x = Index, y = Distance, color = Met
 
 print(line_plot_cat)
 
-# 1. DISCRETE STRUCTURE (The "Ladder"):
-#    The Ordered Profile plot reveals a perfect stepwise structure. This is 
-#    expected because we have p=2 categorical variables, limiting the possible 
-#    Hamming distances (SC1) to exactly three levels: 0.0 (perfect match), 
-#    0.5 (one mismatch), and 1.0 (complete disagreement).
-#
-# 2. CONFIRMATION OF PENALTY (The 0.5 vs 0.66 Gap):
-#    The behavior of the Weighted Gower metric (SC4, Blue Dashed Line) confirms 
-#    its theoretical properties. In the intermediate region where pairs share 
-#    exactly one attribute (SC1 = 0.5), the SC4 distance jumps to approx 0.66.
-#    - Math: 1 - (1 / (1 + 2*1)) = 2/3 ≈ 0.66.
-#    - This visually proves that SC4 penalizes partial disagreements more 
-#      heavily than the standard linear approach.
-#
-# 3. CONCLUSION:
-#    While SC4 offers a stricter definition of similarity, the standard Hamming 
-#    distance (SC1) provides a linear and intuitive representation of 
-#    disagreement (linear steps of 0.5). For the construction of the RelMS 
-#    Joint Metric, we select SC1 (Hamming) to maintain a balanced contribution 
-#    from the categorical variables without artificially inflating the variance 
-#    of partial matches.
+# With two categorical inputs, normalized Hamming distance has levels
+# 0, 0.5 and 1. SC4 uses 1 - a/(a + 2u), where a is the number of matches
+# and u the number of mismatches; one match gives 2/3. This is a penalized
+# matching coefficient, not a weighted Gower distance. We use Hamming.
 
 
 
@@ -749,17 +628,15 @@ cat("V1 (Quant - Mahalanobis):", v1, "\n")
 cat("V2 (Binary - Jaccard):   ", v2, "\n")
 cat("V3 (Cat - Hamming):      ", v3, "\n")
 
-# The results reveal a massive scale disparity: V1 (Quantitative) is orders of 
-# magnitude larger (~429) than V2 and V3 (< 1), due to the unbounded nature of 
-# Mahalanobis distance. This confirms that the raw matrices are not commensurate; 
-# combining them directly would allow quantitative variables to dominate the 
-# analysis (>99.9% influence). Therefore, rescaling each matrix by its Vk is 
-# mandatory to ensure equal weight in the final Joint Metric, as required by RelMS.
+# Divide each squared-distance block by its positive geometric variability.
+# The resulting block weights express the chosen normalization, not a
+# guarantee that the blocks provide equally useful information.
 
 # 6.2 Rescaling to Equal Geometric Variability
 # Rescale D^2 by dividing by Vk. 
 # This imposes equal weight to all three sources of information.
 
+stopifnot(all(is.finite(c(v1, v2, v3))), min(v1, v2, v3) > 0)
 D1_scaled <- D1_quant_sq / v1
 D2_scaled <- D2_bin_sq / v2
 D3_scaled <- D3_cat_sq / v3
@@ -789,13 +666,13 @@ get_matrix_sqrt <- function(G) {
   # Spectral decomposition
   decomp <- eigen(G, symmetric = TRUE)
   
-  # Numerical stability: treat tiny negative eigenvalues as zero
-  # (These can appear due to floating point errors in distance matrices)
+  # Use the positive-semidefinite part. Negative eigenvalues can be structural.
+  cat("Gram negative-eigenvalue mass:", sum(abs(decomp$values[decomp$values < -1e-8])), "\n")
   vals <- decomp$values
   vals[vals < 0] <- 0 
   
   # Reconstruct using sqrt of eigenvalues
-  # Gk^1/2 computed from singular value decomposition (equivalent for symmetric G)
+  # Square root of the positive-semidefinite part, using its eigendecomposition.
   G_sqrt <- decomp$vectors %*% diag(sqrt(vals)) %*% t(decomp$vectors)
   return(G_sqrt)
 }
@@ -813,9 +690,9 @@ m <- 3 # Number of matrices
 # The "Pythagorean Sum" part (matches Generalized Gower)
 sum_G <- G1 + G2 + G3 
 
-# The "Correction" part (discards redundancy)
-# We sum all cross-products where k != l
-# Pairs: (1,2), (2,1), (1,3), (3,1), (2,3), (3,2)
+# The cross-block term sums products of square-root Gram matrices.
+# It modifies the joint geometry; whether this helps a particular task
+# must be evaluated rather than assumed from the correction formula.
 cross_term <- (G1_sqrt %*% G2_sqrt) + (G2_sqrt %*% G1_sqrt) +
               (G1_sqrt %*% G3_sqrt) + (G3_sqrt %*% G1_sqrt) +
               (G2_sqrt %*% G3_sqrt) + (G3_sqrt %*% G2_sqrt)
@@ -878,7 +755,8 @@ eigenvalues <- decomp$values
 
 # Check for significant negative eigenvalues
 min_lambda <- min(eigenvalues)
-is_euclidean <- min_lambda > -1e-5
+is_euclidean <- min_lambda > -1e-8
+D2_corrected <- D2_relms
 
 if (is_euclidean) {
   cat("Matrix is Euclidean. Proceeding directly...\n")
@@ -918,6 +796,9 @@ if (is_euclidean) {
 # Y = U * Lambda^1/2
 # We calculate coordinates for all dimensions (though we usually plot just 2)
 
+final_eigenvalues <- pmax(final_eigenvalues, 0)
+stopifnot(min(D2_corrected) > -1e-8)
+D2_corrected <- pmax(D2_corrected, 0)
 Lambda_sqrt <- diag(sqrt(final_eigenvalues))
 Y_coords <- final_eigenvectors %*% Lambda_sqrt
 
@@ -939,23 +820,11 @@ mds_summary <- data.frame(
 
 print(mds_summary)
 
-#    The summary shows very low explained variance percentages (Dim 1: 0.48%, 
-#    Cumulative 2D: 0.87%). This is an expected side effect of applying 
-#    Theorem 2 (Constant Shift Correction).
-#
-#    To force the non-Euclidean distance matrix into a Euclidean space, we added 
-#    a large constant (c) to all off-diagonal distances. Mathematically, this 
-#    adds variance to ALL dimensions (shifting all eigenvalues up), which 
-#    drastically increases the Total Variance (the denominator).
-#
-#    While the absolute percentages are "diluted," the relative structure is 
-#    preserved. Dimension 1 (Eigenvalue ~1044) and Dimension 2 (Eigenvalue ~821) 
-#    remain the two most dominant axes of variation.
-#
-#    The low values do not mean the map is useless; they simply reflect the 
-#    high dimensionality introduced to satisfy the Euclidean property. The 
-#    2D plot still represents the "best possible" flat projection of this 
-#    complex, corrected space.
+# The Euclidean correction adds 2c to off-diagonal squared distances,
+# shifting the centered spectrum. Read the computed retention percentages:
+# two dimensions retain about 1.36% and five retain about 2.55% here.
+# The low-dimensional maps therefore discard most corrected variability
+# and cannot by themselves establish a reliable class separation.
 
 # 7.5. Visualization: Scree Plot
 
@@ -967,7 +836,7 @@ scree_data <- data.frame(
 )
 
 scree_plot <- ggplot(scree_data, aes(x = Dimension, y = Variance)) +
-  geom_line(color = "#2c3e50", size = 1) +
+  geom_line(color = "#2c3e50", linewidth = 1) +
   geom_point(size = 3, color = "#e74c3c") +
   scale_x_continuous(breaks = 1:10) +
   labs(
@@ -979,7 +848,7 @@ scree_plot <- ggplot(scree_data, aes(x = Dimension, y = Variance)) +
 
 print(scree_plot)
 
-# 7.6. Visualization and Statistical Justification: The MDS Map (Dim 1 vs Dim 2)
+# 7.6. Visualization and Descriptive Associations: The MDS Map (Dim 1 vs Dim 2)
 
 # 1. PREPARATION
 # ------------------------------------------------------------------------------
@@ -1025,7 +894,7 @@ create_mds_plot <- function(var_name) {
     # A. Faded background points (Context)
     geom_point(alpha = 0.15, size = 1.5) + 
     
-    # B. Confidence Ellipses (Shape of the group)
+    # B. Approximate coverage ellipses (shape of the group)
     stat_ellipse(aes(fill = .data[[var_name]]), geom = "polygon", alpha = 0.2, level = 0.95) +
     
     # C. Centroids 
@@ -1057,7 +926,7 @@ create_mds_plot <- function(var_name) {
   return(p)
 }
 
-# 3. STATISTICAL VALIDATION FUNCTION
+# 3. DESCRIPTIVE ASSOCIATIONS FUNCTION
 # ------------------------------------------------------------------------------
 run_stats <- function(var_name) {
   manova_res <- manova(cbind(Dim1, Dim2) ~ mds_master[[var_name]], data = mds_master)
@@ -1068,9 +937,8 @@ run_stats <- function(var_name) {
   
   return(data.frame(
     Variable = var_name,
-    MANOVA_p = format.pval(manova_p, eps = 1e-10),
-    Kruskal_Dim1_p = format.pval(kruskal_p, eps = 1e-10),
-    Signif = ifelse(manova_p < 0.05, "***", "ns")
+    MANOVA_p = manova_p,
+    Kruskal_Dim1_p = kruskal_p
   ))
 }
 
@@ -1085,36 +953,17 @@ for (var in qual_vars) {
 
 # Print Statistics
 stats_table <- do.call(rbind, lapply(qual_vars, run_stats))
-cat("\n--- STATISTICAL VALIDATION ---\n")
+adjusted <- p.adjust(c(stats_table$MANOVA_p, stats_table$Kruskal_Dim1_p), method = "holm")
+stats_table$MANOVA_Holm <- adjusted[seq_along(qual_vars)]
+stats_table$Kruskal_Dim1_Holm <- adjusted[length(qual_vars) + seq_along(qual_vars)]
+cat("\n--- DESCRIPTIVE ASSOCIATIONS ---\n")
 print(stats_table)
 
-# INTERPRETATION OF RESULTS:
-#
-# 1. UNIVERSAL SIGNIFICANCE (p < 1e-10):
-#    The statistical results are unequivocal. For every single variable tested—
-#    whether physical ('hot_star', 'large_planet') or instrumental 
-#    ('flag_notransit', 'binary_disposition')—the MANOVA and Kruskal-Wallis 
-#    tests yield p-values effectively equal to zero.
-#
-# 2. RESOLVING THE VISUAL AMBIGUITY:
-#    Although the visual inspection showed overlapping "clouds" (due to the 
-#    projection of complex data onto 2D), the statistics prove that the 
-#    *centroids* and *distributions* of these groups are mathematically distinct.
-#    The RelMS metric has successfully constructed a geometry where "Planets" 
-#    and "False Positives" reside in statistically different regions of space.
-#
-# 3. MULTIDIMENSIONAL SENSITIVITY:
-#    The fact that physical variables (like 'magnitude_class' or 'hot_star') are 
-#    also highly significant confirms that the map is not just separating 
-#    Signal from Noise. It is also organizing the data based on astrophysical 
-#    properties. The map captures the full complexity of the Kepler Object of 
-#    Interest (KOI) definitions.
-#
-# 4. CONCLUSION:
-#    The RelMS methodology has successfully integrated heterogeneous data sources. 
-#    It generates a metric space where structural differences between all key 
-#    subgroups are statistically significant, validating the use of this map 
-#    for subsequent unsupervised clustering.
+# These associations reuse variables that helped construct the geometry.
+# MANOVA also makes distributional assumptions; Kruskal-Wallis compares
+# rank distributions on Dim1. Holm adjustments cover all fourteen tests.
+# Neither small p-values nor centroids establish classification performance
+# or distinguish planets from instrumental artifacts.
 
 # 7.7: Interpretation of Principal Coordinates (Variable Correlations)
 # 
@@ -1169,7 +1018,7 @@ heatmap_plot <- ggplot(melted_cor, aes(x = Dimension, y = Variable, fill = Corre
   
   labs(
     title = "Principal Coordinates Interpretation",
-    subtitle = "Which original variables drive the MDS dimensions?",
+    subtitle = "Spearman associations between inputs and MDS coordinates",
     x = "", y = ""
   ) +
   theme_minimal() +
@@ -1201,35 +1050,9 @@ cat("\n--- TOP DRIVERS OF DIMENSION 2 ---\n")
 print(head(dim2_drivers, 10))
 
 
-# Based on the Spearman correlation table:
-#
-# 1. DIMENSION 1 (MDS_Dim1): The "Stellar Evolution & Scale" Axis
-#    - Negative Drivers (Left): Strongly driven by 'radius_sun' (-0.48), 
-#      'insolation' (-0.44), and 'mass_sun' (-0.43). This direction represents 
-#      large, massive, and energetic stars.
-#    - Positive Drivers (Right): Driven by 'logg' (+0.46) and 'magnitude' (+0.45).
-#      High 'logg' indicates high surface gravity (compact stars), and high 
-#      magnitude means dimmer stars.
-#    - MEANING: This axis captures the stellar lifecycle and scale. It moves from 
-#      massive Giants (Negative) to compact Dwarfs (Positive).
-#
-# 2. DIMENSION 2 (MDS_Dim2): The "Thermal Environment" Axis
-#    - Negative Drivers (Down): Dominated by 'hot_star' (-0.51) and 'teff_K' (-0.51).
-#      This is the direction of extreme heat.
-#    - Positive Drivers (Up): Associated with 'magnitude' (+0.33) and longer 
-#      'period_days' (+0.29). Cooler, dimmer environments allow for longer 
-#      stable orbits.
-#    - MEANING: This axis separates the "Hot/High-Energy" environments from the 
-#      "Cool/Stable" ones.
-#
-# 3. CRITICAL OBSERVATION ON FLAGS:
-#    Notice that the instrumental flags (e.g., 'flag_stellareclipse') appear much 
-#    lower in the ranking (correlations < 0.3) compared to physical variables.
-#    - CONCLUSION: While the binary flags successfully create *clusters* (separating 
-#      Planets from Noise in distinct regions), the *axes* themselves are spanned 
-#      primarily by the physical variance of the stars. The map geometry is 
-#      physically coherent, embedding the "Planet vs. Noise" classification 
-#      within a broader astrophysical context.
+# Use the computed Spearman coefficients to describe associations of the
+# axes with inputs. Axis signs are arbitrary; these correlations do not
+# identify stellar evolutionary stages, causal mechanisms or noise removal.
 
 # 
 # STEP 7.8: Variable Trajectories 
@@ -1250,7 +1073,7 @@ plot_snake <- function(var_name, pretty_name) {
   # 2. Binning (The "Vertebrae" of the snake)
   # We split the variable into 10 quantiles (deciles) to trace the path
   plot_data$Bin <- cut(plot_data$Value, 
-                       breaks = quantile(plot_data$Value, probs = seq(0, 1, 0.1), na.rm = TRUE),
+                       breaks = unique(quantile(plot_data$Value, probs = seq(0, 1, 0.1), na.rm = TRUE)),
                        include.lowest = TRUE, labels = FALSE)
   
   # 3. Calculate Centroids for each Bin
@@ -1270,7 +1093,7 @@ plot_snake <- function(var_name, pretty_name) {
     
     # B. The Snake (Path connecting centroids)
     geom_path(data = snake_trace, aes(x = Mean_D1, y = Mean_D2, color = Mean_Val), 
-              size = 2, arrow = arrow(length = unit(0.3, "cm"), type = "closed")) +
+              linewidth = 2, arrow = arrow(length = unit(0.3, "cm"), type = "closed")) +
     
     # C. The Points on the Snake
     geom_point(data = snake_trace, aes(x = Mean_D1, y = Mean_D2, color = Mean_Val), size = 4) +
@@ -1312,36 +1135,9 @@ p_mag <- plot_snake("magnitude", "Magnitude (Dimness)")
 grid.arrange(p_temp, p_logg, p_radius, p_mag, ncol = 2)
 
 
-# 1. DIMENSION 1: THE "COMPACTNESS" AXIS (Left vs. Right)
-#    - Surface Gravity (Top-Right Plot): This is the cleanest trajectory. The line 
-#      moves linearly from Left ("Low" gravity) to Right ("High" gravity).
-#    - Radius (Bottom-Left Plot): Mirrors the gravity plot. It moves from 
-#      Right ("Low" radius) to Left ("High" radius).
-#    - MEANING: Dimension 1 is physically defined by the size/density of the object. 
-#      The Left side of the map is populated by large, fluffy Giants, while the 
-#      Right side is populated by compact, dense Dwarfs.
-#
-# 2. DIMENSION 2: THE "ENERGY" AXIS (Top vs. Bottom)
-#    - Temperature (Top-Left Plot): The trajectory dives downwards. "Low" 
-#      temperature stars are at the top, and "High" temperature stars are deep 
-#      at the bottom.
-#    - Magnitude (Bottom-Right Plot): Moves diagonally upwards. "Low" magnitude 
-#      (Bright stars) are lower down, while "High" magnitude (Dim stars) are 
-#      at the top.
-#    - MEANING: Dimension 2 represents the energy output. The bottom of the map 
-#      contains the high-energy, hot, bright stars. The top contains the cooler, 
-#      dimmer stars.
-#
-# 3. NON-LINEARITY:
-#    Notice that the "Radius" snake is not perfectly straight; it curves. This 
-#    suggests that the relationship between planetary size and the star's 
-#    properties is not strictly linear in this projection, capturing the complex 
-#    interplay between a planet and its host star's physics.
-#
-# 4. OVERALL MAP NAVIGATION:
-#    - Top-Right Corner: Small, Dim, Cool stars (Red Dwarfs).
-#    - Bottom-Left Corner: Large, Hot, Bright stars (Giants).
-# 
+# The paths connect mean coordinates across ordered input bins. They show
+# associations in this projection, not stellar trajectories or a verified
+# classification of dwarfs, giants or planetary environments.
 
 # 
 # STEP 7.9: Profile Identification (Conditional Scatterplots)
@@ -1399,37 +1195,17 @@ p3 <- plot_conditional("radius_earth", "Planet Radius (Log Earth)", "viridis")
 p4 <- plot_conditional("period_days", "Orbital Period (Log Days)", "plasma")
 
 # 3. Arrange in a 2x2 Grid
-grid.arrange(p1, p2, p3, p4, ncol = 2, top = "Profile Identification: Physical Drivers on MDS Map")
+grid.arrange(p1, p2, p3, p4, ncol = 2, top = "MDS Coordinates Coloured by Input Measurements")
 
-# 1. VISUALIZING THE GRADIENTS:
-#    These scatterplots map the continuous variables directly onto the MDS 
-#    coordinates, revealing the "texture" of the Kepler Universe.
-#
-# 2. TEMPERATURE (Top-Left):
-#    - Observation: We see a clear vertical gradient. The brightest/yellowest 
-#      points (High Temp) are concentrated at the bottom, while darker purple 
-#      points (Low Temp) are at the top. 
-#    - Confirmation: This visually confirms Dim 2 as the "Thermal Axis".
-#
-# 3. SURFACE GRAVITY (Top-Right):
-#    - Observation: A strong diagonal gradient. High gravity stars (yellow) 
-#      cluster to the right, while low gravity giants (dark) are on the left.
-#    - Confirmation: This aligns with the "Stellar Evolution" interpretation 
-#      of Dim 1.
-#
-# 4. PLANET RADIUS (Bottom-Left):
-#    - Observation: Larger planets (yellow/green) tend to appear on the left 
-#      side of the map, associated with the larger/low-gravity stars.
-#    - Insight: This shows that the largest detected planets in this sample 
-#      are often found around giant stars (or are artifacts associated with them),
-#      while Earth-sized planets are distributed more broadly.
-# 
+# Colors display the observed input values on the same projected geometry.
+# Gradients describe associations and must not be read as causal mechanisms
+# or validated physical labels.
 
 # STEP 8: RelMS vs. Generalized Gower -----
 
 
 
-# Objective: Prove that RelMS adds value over standard Gower by handling
+# Objective: Compare RelMS with the additive construction, including
 # inter-group redundancy
 
 
@@ -1470,7 +1246,7 @@ df_relms <- data.frame(
   Dim1 = Y_coords[, 1],
   Dim2 = Y_coords[, 2],
   Type = labels_vec,
-  Method = "RelMS (Redundancy Removed)"
+  Method = "RelMS-style Cross-term Combination"
 )
 
 # Gower Data
@@ -1478,7 +1254,7 @@ df_gower <- data.frame(
   Dim1 = Y_gower[, 1],
   Dim2 = Y_gower[, 2],
   Type = labels_vec,
-  Method = "Generalized Gower (Simple Sum)"
+  Method = "Scaled Squared-distance Sum"
 )
 
 # Combine
@@ -1489,13 +1265,13 @@ df_compare <- rbind(df_relms, df_gower)
 comp_map <- ggplot(df_compare, aes(x = Dim1, y = Dim2, color = Type)) +
   geom_point(alpha = 0.6, size = 1.5) +
   # Add density to see the structure change
-  geom_density_2d(alpha = 0.4, size = 0.2) +
+  geom_density_2d(alpha = 0.4, linewidth = 0.2) +
   
   scale_color_brewer(palette = "Set1") +
   facet_wrap(~ Method, scales = "free") + # Free scales because units differ
   
   labs(
-    title = "Methodological Comparison: Gower vs. RelMS",
+    title = "Methodological Comparison: Scaled Sum vs. Cross-term Combination",
     subtitle = "Does removing inter-group redundancy change the map structure?",
     x = "Dim 1", y = "Dim 2",
     color = "Object"
@@ -1509,27 +1285,10 @@ comp_map <- ggplot(df_compare, aes(x = Dim1, y = Dim2, color = Type)) +
 print(comp_map)
 
 
-# 1. STRUCTURAL CLARITY (The "De-noising" Effect):
-#    Comparing the two maps reveals a striking difference in geometric structure.
-#    - Generalized Gower (Left): The classes are relatively compressed and 
-#      intermingled. The "False Positive" points (Red) overlap significantly 
-#      with the "Planet" core (Blue) near the origin.
-#    - RelMS (Right): The map exhibits a much cleaner separation. The "False 
-#      Positive" group is projected distinctively outward (top-left trajectory), 
-#      while the "Planet" group forms a tighter, more cohesive cluster.
-#
-# 2. REDUNDANCY CONFIRMATION:
-#    This visual shift confirms that significant inter-group redundancy exists 
-#    in the Kepler data (e.g., physical properties are correlated with binary 
-#    flags). Gower's simple summation "double-counts" this information, blurring 
-#    the distinction between signal and noise.
-#
-# 3. CONCLUSION:
-#    RelMS successfully removes this redundancy via its cross-product correction 
-#    term. The resulting map offers a superior representation of the latent 
-#    structure, maximizing the geometric distinction between astrophysical 
-#    objects and instrumental artifacts. This justifies the use of RelMS coordinates 
-#    as the optimal input for the subsequent Clustering analysis.
+# The additive and cross-block constructions yield different projections.
+# Compare their geometry without treating visual class separation as proof
+# of de-noising or method superiority. Labels derived from inputs are not
+# an independent benchmark, and two-dimensional retention is very low.
 
 
 
@@ -1564,7 +1323,7 @@ par(mfrow = c(1, 2))
 
 # Colors: Blue=Planet, Red=False Positive
 groups_list <- list(
-  Planet = which(grp_sub == "Planet"),
+  Planet = which(grp_sub == "Confirmed/Candidate"),
   FalsePositive = which(grp_sub == "False Positive")
 )
 
@@ -1584,44 +1343,26 @@ qgraph_args <- list(
 
 # --- Plot A: Classical Gower ---
 do.call(qgraph, c(list(input = S_gower, 
-                       title = "Classical Gower (Messy)",
+                       title = "Scaled Sum",
                        minimum = thresh_gow,
                        cut = thresh_gow + 0.1), qgraph_args))
 
 # --- Plot B: Robust RelMS ---
 do.call(qgraph, c(list(input = S_relms, 
-                       title = "Robust RelMS (Structured)",
+                       title = "Cross-term Combination",
                        minimum = thresh_rel,
                        cut = thresh_rel + 0.1), qgraph_args))
 
 par(mfrow = c(1, 1))
 
 
-# 1. TOPOLOGICAL COHESION (RelMS - Right):
-#    The Robust RelMS network reveals a strong "community structure." 
-#    - The Blue nodes (Planets) form tight, interconnected clusters (cliques), 
-#      indicating high mutual similarity.
-#    - The Red nodes (False Positives) are mostly peripheral or form their own 
-#      distinct sub-groups.
-#    - Crucially, there are very few "bridge edges" connecting Red and Blue 
-#      nodes, confirming that the metric successfully discriminates signal from noise.
-#
-# 2. TOPOLOGICAL CONFUSION (Gower - Left):
-#    The Classical Gower network displays a higher degree of entropy.
-#    - We observe numerous strong edges connecting Blue nodes directly to 
-#      Red nodes.
-#    - This suggests that Gower's metric calculates a "false proximity" between 
-#      planets and artifacts, driven by redundant variables that overlap between 
-#      the two classes.
-#
-# 3. CONCLUSION:
-#    The network visualization confirms that RelMS provides a superior input 
-#    for clustering algorithms. By breaking the spurious links between distinct 
-#    classes, RelMS facilitates the detection of natural boundaries in the data.
+# Thresholded networks depend on the chosen edge rule and layout. They are
+# illustrations of these distance matrices, not tests of signal recovery
+# or evidence that either construction removes false detections.
 
 
 
-# STEP 9.5 : Configuration Stability (Jackknife with Procrustes) ------
+# STEP 9.5 : Configuration Stability (Repeated Subsampling with Procrustes) ------
 
 
 # Objective: Visualize how much EACH point moves when data is perturbed.
@@ -1639,7 +1380,7 @@ count_participation <- rep(0, n_points)
 # The Target is our official map (Dim 1 & 2)
 target_conf <- Y_coords[, 1:2]
 
-# 2. Jackknife Loop
+# 2. Repeated Subsampling Loop
 set.seed(123)
 pb <- txtProgressBar(min = 0, max = n_iter, style = 3)
 
@@ -1672,6 +1413,7 @@ for (i in 1:n_iter) {
 close(pb)
 
 # 3. Calculate Mean Radius for each point
+stopifnot(all(count_participation > 0))
 stability_radius <- displacement_sum / count_participation
 
 # Prepare Data
@@ -1692,36 +1434,28 @@ p_conf_stability <- ggplot(stability_df, aes(x = Dim1, y = Dim2)) +
   geom_point(aes(color = Type), size = 1) +
   
   scale_color_brewer(palette = "Set1") +
-  coord_fixed() + # Keeps circles round
   labs(
-    title = "Configuration Stability (Jackknife)",
-    subtitle = "Size of circle = Positional Uncertainty of that object.",
+    title = "Configuration Stability (90% Subsamples)",
+    subtitle = "Radius = Mean Procrustes displacement over participating subsamples.",
     x = "Dim 1", y = "Dim 2",
     color = "Object"
   ) +
-  coord_cartesian(xlim = c(-7, 2.5), ylim = c(-2.5, 5)) +
+  coord_fixed(xlim = c(-7, 2.5), ylim = c(-2.5, 5)) +
   theme_minimal() +
   theme(legend.position = "bottom")
 
 print(p_conf_stability)
 
 
-#    - The "Planet" cluster (Blue) exhibits very small uncertainty circles, 
-#      indicating a highly stable geometric structure. These objects are deeply 
-#      anchored by their physical similarities.
-#    - The "False Positive" group (Red) shows larger circles, revealing higher 
-#      sensitivity to sampling. This confirms that "noise" is inherently more 
-#      heterogeneous and less structured than the planetary signal.
-#
+# Resampling circles summarize displacement after Procrustes alignment.
+# They reflect this subsampling procedure, not physical uncertainty or
+# uncertainty in the source measurements.
 
 
 
-# 
-# STEP 10: EIGENVALUE STABILITY ANALYSIS (Bootstrap) ----- 
-# 
-# Objective: Check if Dim 1 is consistently dominant over Dim 2.
-# Interpretation: Points below the diagonal (y=x) mean Dim 1 > Dim 2 always.
-# A distinct gap from the diagonal indicates stable dimensionality.
+# Bootstrap ordered eigenvalues to describe their sampling variability.
+# Eigenvalues are sorted within each resample, so being below y=x follows
+# from ordering and cannot rule out eigenvector mixing or axis crossing.
 
 # 1. Setup
 n_boot <- 50          
@@ -1774,13 +1508,13 @@ create_stab_plot <- function(data, x_col, y_col, title) {
   lim_min <- min(all_vals) * 0.98
   lim_max <- max(all_vals) * 1.02
   
-  p <- ggplot(data, aes_string(x = x_col, y = y_col)) +
+  p <- ggplot(data, aes(x = .data[[x_col]], y = .data[[y_col]])) +
     # Diagonal y=x
     geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray40") +
     
     # Bootstrap Cloud
     geom_point(alpha = 0.4, color = "#377EB8", size = 1.5) +
-    stat_ellipse(level = 0.95, color = "#E41A1C", size = 0.8) +
+    stat_ellipse(level = 0.95, color = "#E41A1C", linewidth = 0.8) +
     
     # Centroid Marker (Black Dot)
     annotate("point", x = cent_x, y = cent_y, shape = 16, size = 3, color = "black") + 
@@ -1803,27 +1537,12 @@ p13 <- create_stab_plot(eigen_store, "D1", "D3", "Dim 1 vs Dim 3")
 p23 <- create_stab_plot(eigen_store, "D2", "D3", "Dim 2 vs Dim 3")
 
 grid.arrange(p12, p13, p23, ncol = 3, 
-             top = "Eigenvalue Stability: Bootstrap Cloud & Centroid (●)")
+             top = "Eigenvalue Stability: Bootstrap Cloud & Centroid")
 
-# 1. VISUAL SEPARATION (The Diagonal Test):
-#    In all three panels, the bootstrap clouds (blue points) and their 
-#    confidence ellipses (red lines) are situated strictly below the dashed 
-#    diagonal line ($y=x$).
-#    - Meaning: This visually confirms that the variance explained by the 
-#      lower-order dimension is statistically greater than the higher-order 
-#      dimension in every resampled scenario.
-#
-# 2. DIMENSIONAL HIERARCHY:
-#    The black centroid dots (●), representing the mean stability of the system, 
-#    confirm a robust hierarchy:
-#    - Dim 1 vs Dim 2: Distinctly separated. Dim 1 is consistently the dominant axis.
-#    - Dim 2 vs Dim 3: Also separated below the diagonal. Dim 2 captures unique 
-#      structural information that is distinct from Dim 3.
-#
-# 3. CONCLUSION:
-#    There is no evidence of "eigenvalue crossing" or axis mixing. The 
-#    dimensionality of the RelMS map is stable, confirming that the 2D projection 
-#    captures the primary structure of the data reliably ($D_1 > D_2 > D_3$).
+# The clouds show variability of ordered eigenvalues across fifty bootstrap
+# replicates. Ellipses are fitted coverage contours, not
+# confidence regions for their means. Ordering forces lambda1 >= lambda2;
+# axis stability requires eigenvector or subspace comparisons.
 
 
 # STEP 11: Methodological Evolution -----
@@ -1874,7 +1593,7 @@ p_evolution <- ggplot(df_evolution, aes(x = D1, y = D2, color = Type)) +
   scale_color_brewer(palette = "Set1") +
   labs(
     title = "Evolution of the Map Structure",
-    subtitle = "From naive physics (Left) to robust physics (Center) to full data integration (Right)",
+    subtitle = "Euclidean, robust Mahalanobis and joint dissimilarities; panel scales differ",
     x = "Dim 1", y = "Dim 2",
     color = "Object"
   ) +
@@ -1886,40 +1605,13 @@ p_evolution <- ggplot(df_evolution, aes(x = D1, y = D2, color = Type)) +
 
 print(p_evolution)
 
-# 1. PANEL 1: NAIVE EUCLIDEAN (Left)
-#    - Visual: The map appears as a diffuse, amorphous cloud.
-#    - Failure: "Planets" (Blue) and "False Positives" (Red) are heavily mixed 
-#      throughout the central region. A simple Euclidean distance fails to 
-#      distinguish signal from noise because it is dominated by the variables 
-#      with the largest variance (scale effect) and ignores correlations.
-#
-# 2. PANEL 2: ROBUST MAHALANOBIS (Center)
-#    - Visual: A striking geometric transformation occurs. The cloud collapses 
-#      into a distinct "V-shape" or fan structure.
-#    - Partial Success: This shape represents the underlying stellar physics 
-#      (the "Main Sequence" and "Giant Branch" of the Hertzsprung-Russell 
-#      diagram). By accounting for covariance, Mahalanobis reveals the physical 
-#      reality.
-#    - Limitation: However, look at the colors. The Red and Blue points are 
-#      still significantly overlapping, especially near the vertex of the "V". 
-#      Physics alone cannot fully separate instrumental artifacts from real planets.
-#
-# 3. PANEL 3: FINAL RelMS (Right)
-#    - Visual: The V-shape is preserved but the internal geometry changes.
-#    - Evidence-based note: in 2D, RelMS does not necessarily maximize a direct
-#      Planet vs False Positive split. A 2D projection can under-represent
-#      mixed-type structure that becomes clear in higher dimensions.
-#    - Role of RelMS: integrate heterogeneous sources (physics + flags + categorical)
-#      into a single geometry designed for downstream structure discovery.
-#      In this project, that payoff is validated in the clustering phase using
-#      Dim1–Dim5 (k=7), where multiple sub-populations (including noise types)
-#      become separable.
+# These panels compare geometries induced by three distance constructions.
+# Their shapes do not identify the main sequence or giant branch. The
+# low-dimensional RelMS view retains little total variability; neither
+# this comparison nor the subsequent k=7 profiles validate noise removal.
 
-# 4. CONCLUSION:
-#    - Mahalanobis best preserves the physical distance structure (stellar physics).
-#    - RelMS provides a mixed-type geometry whose value is confirmed by the
-#      multi-cluster solution and profiling, rather than by a single 2D
-#      Planet-vs-FP separation.
+# No independent target or benchmark here establishes which metric best
+# preserves physical structure. Treat the comparison as exploratory.
 
 
 # ==============================================================================
@@ -1930,21 +1622,20 @@ print(p_evolution)
 # STEP 12: ASSESSMENT OF CLUSTERING TENDENCY (VAT & HOPKINS) -----
 
 
-# 1. Prepare Input Data
-# ---------------------
-# We use the first 5 dimensions of the RelMS MDS coordinates.
-# Why? Because they contain the structural signal we found in the previous phase.
+# PAM uses the first five RelMS coordinates, an exploratory truncation
+# retaining about 2.55% of corrected variability in this run. Cluster
+# results are conditional on that substantial loss of distance information.
 clus_data <- Y_coords[, 1:5]
 
 # Ensure it's a dataframe
 clus_data <- as.data.frame(clus_data)
 colnames(clus_data) <- paste0("Dim", 1:5)
 
-# 2. Hopkins Statistic (The Numerical Test)
-# -----------------------------------------
-# H values > 0.75 indicate a strong clustering tendency (90% confidence).
+# Hopkins compares observed neighbor distances with a uniform reference
+# in the bounding box. High values under this package convention suggest
+# nonuniformity; 0.75 is not a calibrated 90% confidence threshold.
 set.seed(123)
-hopkins_res <- get_clust_tendency(clus_data, n = nrow(clus_data)-1, graph = FALSE)
+hopkins_res <- get_clust_tendency(clus_data, n = 100, graph = FALSE)
 
 cat("\nHopkins Statistic:", round(hopkins_res$hopkins_stat, 4), "\n")
 
@@ -1960,28 +1651,13 @@ dist_vat <- dist(clus_data[vat_sub_idx, ])
 p_vat <- fviz_dist(dist_vat, 
                    gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07"),
                    order = TRUE, show_labels = FALSE) +
-  labs(title = "VAT (Visual Assessment of Tendency)")
+  labs(title = "Ordered Pairwise-Distance Heatmap")
 
 print(p_vat)
 
-# 1. NUMERICAL EVIDENCE (Hopkins Statistic):
-#    - Result: H = 0.9768.
-#    - Thresholds: H = 0.5 indicates random noise. H > 0.75 indicates valid clusters.
-#    - Conclusion: The obtained value is extremely close to 1. This provides 
-#      statistical certainty that the dataset is NOT uniformly distributed. 
-#      There is a very strong grouping structure embedded in the RelMS coordinates.
-#
-# 2. VISUAL EVIDENCE (VAT Plot):
-#    - The Visual Assessment of Tendency (VAT) displays distinct, dark blocks 
-#      along the diagonal (red/orange squares). 
-#    - If the data were random, the matrix would look like a uniform grey mist.
-#    - The presence of these sharp blocks visually confirms that the objects 
-#      naturally separate into distinct communities.
-#
-# 3. VERDICT:
-#    Both the statistical and visual tests confirm that the data is suitable 
-#    for partitioning. We proceed to Hierarchical Clustering to determine the 
-#    number of groups.
+# Read the computed Hopkins statistic and VAT image as tendency diagnostics.
+# Nonuniformity need not imply discrete clusters, and these diagnostics
+# neither determine k nor establish statistical certainty.
 
 
 
@@ -2016,7 +1692,7 @@ print(round(ac_scores, 4))
 
 # Interpretation logic:
 best_method <- names(which.max(ac_scores))
-cat(">> BEST METHOD:", toupper(best_method), "\n")
+cat(">> HIGHEST AGGLOMERATIVE COEFFICIENT:", toupper(best_method), "\n")
 
 # 3. Visualization: The Dendrogram
 # -----------------------------------------------
@@ -2044,29 +1720,9 @@ theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14))
 print(p_dendro)
 
 
-# 1. LINKAGE METHOD SELECTION (Agglomerative Coefficients):
-#    - We compared four linkage methods: Average, Single, Complete, and Ward.
-#    - Result: Ward's method yielded the highest Agglomerative Coefficient 
-#      (AC ~ 0.9967).
-#    - Meaning: An AC close to 1 indicates that the clustering structure is 
-#      very strong and well-defined. Ward's method is particularly effective 
-#      here because it minimizes intra-cluster variance, creating compact, 
-#      spherical groups that align well with the "clouds" we observed in the 
-#      MDS map.
-#
-# 2. DENDROGRAM ANALYSIS (Visual Inspection):
-#    - The Circular Dendrogram reveals the hierarchical relationship between 
-#      the 1000 observations.
-#    - Key Observation: Starting from the center (root), the tree immediately 
-#      splits into TWO massive, distinct branches (clades).
-#    - The height of this first split is very large compared to subsequent 
-#      splits, which is a strong visual indicator that the natural number of 
-#      groups in this dataset is k=2.
-#
-# 3. PRELIMINARY HYPOTHESIS:
-#    - The structure suggests a fundamental binary division in the Kepler data. 
-#    - Based on our previous MDS analysis, these two branches likely correspond 
-#      to the "Planet Candidates" (Signal) and the "False Positives" (Noise).
+# Agglomerative coefficients and dendrograms describe each linkage on this
+# representation. A high coefficient does not identify physical populations
+# or imply that the two largest branches correspond to disposition labels.
 
 # 
 # STEP 14: METHOD COMPARISON (COPHENETIC CORRELATION) ------
@@ -2122,29 +1778,15 @@ k <- round(sqrt(n/2))
 clusters <- cutree(hc_res, k = k)
 print(k) # too many
 
-# 1. COPHENETIC CORRELATION RESULTS:
-#    - Average Linkage: 0.8887 (Highest fidelity to original distances).
-#    - Ward's Method: 0.4948 (Lower fidelity).
-#
-# 2. VISUAL INSPECTION VS. MATH:
-#    - Although Average Linkage has the highest cophenetic correlation, its 
-#      dendrogram shows signs of "chaining" (inconsistent branching heights).
-#    - Ward's Method, despite a lower correlation, produces the most visually 
-#      distinct and compact clusters. This is expected behavior: Ward's algorithm 
-#      optimizes for *variance reduction* (creating spherical groups) rather 
-#      than preserving pairwise distances.
-#
-# 3. DECISION:
-#    - We prioritize *structural separation* over distance fidelity for this 
-#      clustering task. Therefore, we select Ward's Method as it clearly 
-#      delineates the major sub-populations (Signal vs. Noise) required for 
-#      our analysis.
-# 
+# Cophenetic correlation measures how well dendrogram merge distances
+# represent the original dissimilarities. Ward favors compact groups,
+# while average linkage optimizes a different criterion. We use Ward as
+# an exploratory choice, without assigning signal/noise meaning to its branches.
 
 
 # STEP 15: DETERMINING OPTIMAL CLUSTERS (THE "k" DECISION) ------
 
-# Goal: Use statistics (Elbow & Silhouette) to statistically confirm k.
+# Goal: Compare descriptive elbow and silhouette criteria within the tested grid.
 
 # We test from k=1 to k=8 using the PAM algorithm (Partitioning Around Medoids)
 # PAM is the robust version of K-Means we will use in the next step.
@@ -2153,16 +1795,16 @@ print(k) # too many
 # --------------------------------------------
 # Look for the "knee" where the curve flattens.
 p_elbow <- fviz_nbclust(clus_data, pam, method = "wss", k.max = 8) +
-  geom_vline(xintercept = 7, linetype = 2, color = "#E41A1C") +
+
   labs(title = "3a. Elbow Method (WSS)", 
-       subtitle = "Optimal k is at the 'knee' bend")
+       subtitle = "Descriptive within-cluster dispersion")
 
 # B. Silhouette Method (Average Width)
 # ------------------------------------
 # Look for the highest bar.
 p_sil_k <- fviz_nbclust(clus_data, pam, method = "silhouette", k.max = 8) +
   labs(title = "3b. Average Silhouette Method", 
-       subtitle = "Highest peak indicates optimal k")
+       subtitle = "Best silhouette in k=2 to 8 grid")
 
 # Combine them side-by-side
 grid.arrange(p_elbow, p_sil_k, ncol = 2)
@@ -2182,7 +1824,7 @@ p_sil_indiv <- fviz_silhouette(pam_check,
                                print.summary = FALSE,
                                ggtheme = theme_minimal()) +
   labs(title = paste("Silhouette Plot for k =", k_check), 
-       subtitle = "Each bar represents a point. Negative bars = Mismatched points.") +
+       subtitle = "Each bar represents a point. Negative bars = Closer on average to another cluster.") +
   theme(axis.text.x = element_text(angle = 0))
 
 print(p_sil_indiv)
@@ -2195,46 +1837,19 @@ cat("\nAverage Silhouette Width per Cluster:\n")
 print(summary(sil_info)$clus.avg.widths)
 cat("\nGlobal Average:", round(summary(sil_info)$avg.width, 4), "\n")
 
-# 1. ELBOW METHOD (WSS):
-#    - Observation: The Total Within Sum of Squares curve drops sharply initially.
-#    - Critical Point: While there is a slight bend at k=2, the curve continues 
-#      to drop significantly until k=7, where it forms a distinct "valley" or 
-#      plateau.
-#    - Meaning: Stopping at k=2 would leave too much variance unexplained. The 
-#      geometry suggests that 7 centers are needed to efficiently capture the 
-#      complexity of the data.
-#
-# 2. AVERAGE SILHOUETTE METHOD:
-#    - Observation: The plot shows a clear global maximum at k=7.
-#    - Significance: This is the strongest evidence. It indicates that the 
-#      average object is most similar to its own cluster (cohesion) and distinct 
-#      from neighbors (separation) when the data is partitioned into 7 groups.
-#
-# 3. INDIVIDUAL SILHOUETTE PROFILE (Visual Validation):
-#    - Structure: The individual plot shows 7 distinct "flags".
-#    - Cohesion: Most clusters (especially 1, 2, 3, and 4) exhibit thick blocks 
-#      of positive values, indicating well-defined cores.
-#    - Border Points: We observe some negative bars (pointing left), particularly 
-#      at the tails of Cluster 4, 6 and 7. These represent "ambiguous" objects 
-#      located at the boundaries between groups.
-#    - Global Score: The average width (red dashed line ~0.33) confirms that 
-#      while the structure is complex and has some overlap (typical in astrophysics), 
-#      the 7-cluster partition is statistically valid.
-#
-# 4. CONCLUSION:
-#    - We reject the simple binary hypothesis (Planet vs Noise) in favor of a 
-#      granular 7-cluster model. This likely captures distinct sub-populations 
-#      (e.g., specific noise types like "Eclipsing Binaries" vs "Background" 
-#      or distinct planet classes).
+# Inspect the computed WSS and silhouette profiles. k=7 is an exploratory
+# profiling choice, not a proven optimum or a significance test. Negative
+# silhouettes flag observations closer to another cluster on average.
+# Compare k=2 and k=7 without equating either with astrophysical classes.
 
  
 
 
 # STEP 16: Clusters Plotting (k=2 vs k=7) ------
 
-# Goal: Compare the Binary Hypothesis vs the Granular Reality side-by-side.
-# We use statistical "confidence ellipses" (type="norm") for a clean look,
-# focused on the core 95% of each cluster, with fixed X-axis limits.
+# Compare two exploratory partitions using projected normal 95% coverage
+# ellipses. These are not confidence regions for cluster means, and the
+# fixed plotting limits omit some observations from view.
 
 # 1. Setup Models & Colors
 # ------------------------
@@ -2252,7 +1867,7 @@ y_lims <- c(-3, 3)
 
 # Left Panel: k=2 (Binary)
 p_k2_ell <- fviz_cluster(pam_k2, 
-                         data = clus_data, 
+                         data = clus_data, stand = FALSE,
                          geom = "point", 
                          pointsize = 1.2,
                          
@@ -2262,13 +1877,13 @@ p_k2_ell <- fviz_cluster(pam_k2,
                          
                          palette = cols_k2, 
                          ggtheme = theme_minimal(),
-                         main = "A. Binary Hypothesis (k=2)") +
+                         main = "A. Exploratory Partition (k=2)") +
   coord_cartesian(xlim = x_lims, ylim = y_lims) + 
   theme(legend.position = "none", plot.title = element_text(hjust = 0.5))
 
 # Right Panel: k=7 (Granular)
 p_k7_ell <- fviz_cluster(pam_k7, 
-                         data = clus_data, 
+                         data = clus_data, stand = FALSE,
                          geom = "point", 
                          pointsize = 1.2,
                          
@@ -2278,40 +1893,18 @@ p_k7_ell <- fviz_cluster(pam_k7,
                          
                          palette = cols_k7, 
                          ggtheme = theme_minimal(),
-                         main = "B. Granular Reality (k=7)") +
+                         main = "B. Exploratory Detailed Partition (k=7)") +
   coord_cartesian(xlim = x_lims, ylim = y_lims) + 
   theme(legend.position = "none", plot.title = element_text(hjust = 0.5))
 
 # Combine side-by-side
 grid.arrange(p_k2_ell, p_k7_ell, ncol = 2, 
-             top = "STRUCTURAL COMPARISON: Confidence Ellipses (95% Core)")
+             top = "Fitted 95% Data Ellipses (axis percentages refer to the retained 5D space)")
 
 
-# 1. VISUAL SETUP:
-#    - We compare the k=2 model (left) against the k=7 model (right) using 
-#      95% confidence ellipses. These shapes outline the dense "core" of each 
-#      cluster, providing a cleaner view than convex hulls.
-#    - The X-axis is zoomed to the range [-2.5, 7.5] to focus on the main data structure.
-#
-# 2. BINARY MODEL (k=2) - Left Panel:
-#    - Observation: The blue ellipse is massive and highly elongated. It tries 
-#      to encompass a huge, diverse area of the map.
-#    - Critique: This "one-size-fits-all" approach is inefficient. The ellipse 
-#      includes vast empty regions where no stars exist, indicating poor fit 
-#      to the actual data geometry.
-#
-# 3. GRANULAR MODEL (k=7) - Right Panel:
-#    - Observation: The single large blue ellipse is replaced by distinct, 
-#      smaller, and tighter ellipses (e.g., Purple, Green, Cyan, Orange).
-#    - Advantage: These smaller ellipses hug the data points closely. They 
-#      respect the "V-shape" structure of the map, with specific clusters 
-#      capturing the tips and the central mixing region accurately.
-#
-# 4. CONCLUSION:
-#    The comparison visually confirms the statistical findings (Elbow/Silhouette). 
-#    The k=7 model provides a much more faithful representation of the underlying 
-#    sub-populations than the overly simplistic k=2 binary split.
-# 
+# The cropped projection and ellipses illustrate the two partitions. More
+# clusters generally give smaller groups; that alone is not evidence of a
+# better model. Assess the numeric diagnostics and retained dimensions.
 
 
 
@@ -2364,7 +1957,7 @@ for(var in desired_vars) {
 comp_results$ARI_k2 <- round(comp_results$ARI_k2, 4)
 comp_results$ARI_k7 <- round(comp_results$ARI_k7, 4)
 
-cat("\n--- PERFORMANCE TABLE (Adjusted Rand Index) ---\n")
+cat("\n--- DESCRIPTIVE AGREEMENT (ARI; shared input features) ---\n")
 print(comp_results)
 
 
@@ -2408,79 +2001,8 @@ if(length(plot_list) > 0) {
 
 # Interpretation of the ARI Performance Table
 
-# 1) THE DOMINANT VARIABLE AT k=2 (Thermal split)
-#
-# Observation:
-# Look at the variable "hot_star". The k=2 model has an ARI of 0.3522
-# (the highest value in the entire table), while k=7 drops to 0.21.
-#
-# Meaning (refined):
-# The k=2 split aligns most strongly with stellar temperature (hot_star),
-# more than with the Planet vs False Positive label. This suggests that
-# the coarsest partition is driven primarily by a thermal contrast, while
-# any Planet/Noise separation is present but secondary.
-#
-# Note:
-# The overall "V-shape" in the MDS map reflects multiple physical gradients
-# (e.g., stellar scale/evolution on Dim1 and thermal environment on Dim2),
-# not temperature alone.
-#
-# Conclusion:
-# The k=2 partition is dominated by a thermal contrast (hot_star), indicating that
-# the coarsest split primarily follows the thermal axis of the RelMS map (Dim 2).
-# However, the global "V-shape" is not governed by temperature alone: it emerges
-# from multiple physical gradients (stellar scale/evolution on Dim 1 and thermal
-# environment on Dim 2). Therefore, k=2 is an oversimplification that compresses
-# several astrophysical sub-populations into two groups, masking planetary-level
-# structure that becomes clearer in the k=7 solution.
-
-# 2) THE SUCCESS OF k=7 IN PHYSICAL DETAIL
-#
-# Insolation (insolation_class):
-# This is where k=7 clearly outperforms. It goes from a negligible ARI
-# in k=2 (0.03) to a solid value in k=7 (0.24). This shows that the
-# 7-cluster model respects energy levels (Low/Medium/High), separating
-# "scorched" planets from more temperate ones.
-#
-# Size (large_planet):
-# k=7 roughly doubles the performance (0.14 vs 0.06). This confirms that
-# the 7 clusters have managed to separate Gas Giants from rocky planets,
-# something the binary model was mixing together.
-#
-# Brightness (magnitude_class):
-# Again, k=7 is far superior (0.14 vs 0.01), capturing the observational
-# bias (bright vs faint stars).
-
-# 3) ERROR FLAGS
-#
-# Observation:
-# ARI values for the flags (flag_notransit, flag_stellareclipse) are low
-# in general, but there is a key pattern.
-#
-# Comparison:
-# The k=2 model shows negative values (worse than random) for the flags.
-# The k=7 model shows positive values (especially flag_stellareclipse at 0.07).
-#
-# Meaning:
-# Although no cluster is a "pure" error type, the k=7 model is starting
-# to geometrically isolate Eclipsing Binaries, while k=2 completely
-# dilutes them into the general noise.
-
-# 4) BINARY DISPOSITION (binary_disposition)
-#
-# Result:
-# Both models show low and similar performance (~0.14).
-#
-# Why this happens:
-# This validates the initial hypothesis that the "False Positive" label
-# is a catch-all category. It contains very different phenomena
-# (binary stars, instrumental noise, software failures) that are not
-# geometrically similar. This is why no clustering algorithm can
-# perfectly match that label: physical reality is more complex than
-# a simple "Yes/No".
-
-
-
+# k=2 and k=7 are exploratory comparisons. Agreement against flags and derived
+# labels is descriptive because these features also enter the distance.
 
 # STEP 17: CLUSTER PROFILING (Physical Characterization) -----
 
@@ -2512,7 +2034,7 @@ cluster_summary <- df_sample %>%
     Bad_Transit_Pct = mean(flag_notransit) * 100,
     Eclipse_Pct = mean(flag_stellareclipse) * 100
   ) %>%
-  mutate(across(where(is.numeric), round, 2)) # Round for better readability
+  mutate(across(where(is.numeric), ~ round(.x, 2))) # Round for better readability
 
 cat("\n--- CLUSTER DIAGNOSTIC TABLE (Please copy this output) ---\n")
 print(cluster_summary)
@@ -2541,10 +2063,8 @@ p_box <- ggplot(df_long, aes(x = Cluster, y = Value, fill = Cluster)) +
 print(p_box)
 
 
-# 4. VISUALIZATION B: THE EXOPLANET MAP (Period vs Radius)
-# ------------------------------------------------------------------
-# This plot shows what type of planets they are (Giants, Earths, etc.)
-# and colors by Cluster to see if they group logically.
+# Plot candidate period and radius by cluster. These catalog estimates
+# and disposition flags do not determine composition or planet type.
 
 p_exomap <- ggplot(df_sample, aes(x = period_days, y = radius_earth, color = Cluster)) +
   # Background points (grey) for context
@@ -2554,15 +2074,15 @@ p_exomap <- ggplot(df_sample, aes(x = period_days, y = radius_earth, color = Clu
   geom_point(size = 2, alpha = 0.8) +
   # Approximate reference lines (in Log10)
   geom_hline(yintercept = log10(4 + 1), linetype = "dashed", color = "black") + # Super-Earth/Neptune limit
-  annotate("text", x = 0, y = 0.75, label = "Rocky/Super-Earths", hjust = 0, size = 3, fontface="italic") +
-  annotate("text", x = 0, y = 0.9, label = "Gas Giants", hjust = 0, size = 3, fontface="italic") +
+  annotate("text", x = 0, y = 0.75, label = "R <= 4 Earth radii", hjust = 0, size = 3, fontface="italic") +
+  annotate("text", x = 0, y = 0.9, label = "R > 4 Earth radii", hjust = 0, size = 3, fontface="italic") +
   
   scale_color_brewer(palette = "Set1") +
   facet_wrap(~ Cluster) +
   labs(title = "Exoplanet Classification Map by Cluster",
        subtitle = "Period vs. Radius Relationship (Separated by Group)",
-       x = "Orbital Period [log10(days)]",
-       y = "Planetary Radius [log10(Earth Radii)]") +
+       x = "Orbital Period [log10(days + 1)]",
+       y = "Planetary Radius [log10(Earth radii + 1)]") +
   theme_bw() +
   theme(legend.position = "none")
 
@@ -2584,13 +2104,13 @@ df_scaled_profile <- df_sample %>%
   dplyr::select(Cluster, radius_earth, period_days, teff_K, insolation, magnitude, logg) %>%
   mutate(across(-Cluster, scale)) %>%  # Scale all columns except Cluster
   group_by(Cluster) %>%
-  summarise(across(everything(), mean, na.rm = TRUE)) %>% # Calculate Mean Z-Score per Cluster
+  summarise(across(everything(), ~ mean(.x, na.rm = TRUE))) %>% # Calculate Mean Z-Score per Cluster
   pivot_longer(cols = -Cluster, names_to = "Feature", values_to = "Z_Score") %>%
   mutate(Cluster = as.factor(Cluster))
 
 # 2. Plot
 p_snake <- ggplot(df_scaled_profile, aes(x = Feature, y = Z_Score, group = Cluster, color = Cluster)) +
-  geom_line(size = 1.2, alpha = 0.8) +
+  geom_line(linewidth = 1.2, alpha = 0.8) +
   geom_point(size = 3) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "black", alpha = 0.6) +
   
@@ -2605,26 +2125,24 @@ p_snake <- ggplot(df_scaled_profile, aes(x = Feature, y = Z_Score, group = Clust
 
 print(p_snake)
 
-# INTERPRETATION FOR LABELING:
-# - The Horizon (0 Line): This is the "Average Star/Planet".
-# - Peaks & Valleys: Look for the most extreme points.
-#   Example: If Cluster 1 peaks high on 'radius_earth' but is low on 'period_days',
-#   label it "Short-Period Giants" (Hot Jupiters).
-# - Crossing Lines: If two lines cross in an 'X' shape, those clusters are
-#   opposites (Inverse Correlation).
+# The zero line is the overall mean on standardized transformed inputs.
+# Profiles describe relative cluster means. Crossing lines do not imply
+# inverse correlation, and these inputs do not identify Hot Jupiters.
 
 
 # 6. RELATIVE IMPORTANCE HEATMAP (% Deviation)
 
 # 1. Calculate Global Means and Cluster Means
 global_means <- df_sample %>%
-  dplyr::select(radius_earth, period_days, teff_K, insolation, magnitude) %>%
-  summarise(across(everything(), mean, na.rm = TRUE))
+  mutate(across(c(radius_earth, period_days, teff_K, insolation), ~ 10^.x - 1)) %>%
+  dplyr::select(radius_earth, period_days, teff_K, insolation) %>%
+  summarise(across(everything(), ~ mean(.x, na.rm = TRUE)))
 
 cluster_means <- df_sample %>%
-  dplyr::select(Cluster, radius_earth, period_days, teff_K, insolation, magnitude) %>%
+  mutate(across(c(radius_earth, period_days, teff_K, insolation), ~ 10^.x - 1)) %>%
+  dplyr::select(Cluster, radius_earth, period_days, teff_K, insolation) %>%
   group_by(Cluster) %>%
-  summarise(across(everything(), mean, na.rm = TRUE))
+  summarise(across(everything(), ~ mean(.x, na.rm = TRUE)))
 
 # 2. Calculate % Difference: (ClusterMean - GlobalMean) / GlobalMean
 # We iterate to apply the formula respecting the columns
@@ -2644,7 +2162,7 @@ p_heatmap <- ggplot(df_relative, aes(x = Feature, y = Cluster, fill = Pct_Diff))
   scale_fill_gradient2(low = "#D73027", mid = "white", high = "#1A9850", midpoint = 0, labels = scales::percent) +
   
   labs(
-    title = "Relative Importance Heatmap",
+    title = "Relative Physical Means (Original Units)",
     subtitle = "Percentage deviation from the Global Mean. Red = Below Avg, Green = Above Avg.",
     x = "Feature",
     y = "Cluster ID",
@@ -2655,12 +2173,9 @@ p_heatmap <- ggplot(df_relative, aes(x = Feature, y = Cluster, fill = Pct_Diff))
 
 print(p_heatmap)
 
-# INTERPRETATION:
-# - Dark Green (+): The DEFINING feature of the cluster.
-#   If 'insolation' is +50% and everything else is 0%, the label is "High Energy".
-# - Dark Red (-): The ABSENT feature.
-#   If 'radius_earth' is -30%, the label is "Small/Rocky".
-# - Use this chart to write the final "Description" in your report.
+# Positive and negative cells indicate above- and below-average values,
+# respectively. Below average is not absence; radius alone does not identify
+# a rocky composition. Inspect the units and physical-scale medians.
 
 # 7. RADAR CHART (Spider Plot)
 
@@ -2670,7 +2185,10 @@ data_radar_raw <- df_sample %>%
   dplyr::select(radius_earth, period_days, teff_K, insolation, magnitude)
 
 # Normalize function
-min_max_norm <- function(x) { (x - min(x)) / (max(x) - min(x)) }
+min_max_norm <- function(x) {
+  if (diff(range(x)) == 0) return(rep(0, length(x)))
+  (x - min(x)) / diff(range(x))
+}
 data_radar_norm <- as.data.frame(lapply(data_radar_raw, min_max_norm))
 
 # Add Cluster IDs back and calculate Mean per Cluster
@@ -2707,12 +2225,12 @@ radarchart(radar_final, axistype = 1,
     title = "Cluster Profiles: Radar Comparison"
 )
 
-# Allow drawing outside plot region so the legend can sit "outside"
+# Allow the legend to use the plot margins while keeping it inside the page.
 par(xpd = NA)
 
 legend(
   x = "topright",
-  inset = c(-0.25, -0.05),  # (right, up) -> negative values push it outside
+  inset = c(0.01, 0.01),  # Keep the legend inside the figure device
   legend = paste("Cluster", 1:nrow(radar_means)),
   bty = "n",
   pch = 20,
@@ -2725,11 +2243,9 @@ legend(
 # Reset clipping
 par(xpd = FALSE)
 
-# INTERPRETATION:
-# - Spikes: A sharp spike outward means "Dominance" in that variable.
-# - Area: A large polygon area means "High Values Everywhere" (e.g., Big, Hot, Bright).
-# - Tiny Polygon: Means "Low Values Everywhere" (e.g., Small, Cool, Dim).
-# - Shape similarity: Clusters with similar polygon shapes are related, even if one is smaller (same ratios, different scale).
+# Radar profiles use the displayed rescaling. Polygon area depends on
+# axis order and scaling, and does not summarize total physical size,
+# brightness or energy. Compare individual axes rather than polygon area.
 
 
 
@@ -2754,7 +2270,7 @@ cluster_summary <- df_sample %>%
     Pct_Eclipse = mean(flag_stellareclipse),
     Pct_NoTrans = mean(flag_notransit)
   ) %>%
-  mutate(across(where(is.numeric), round, 2))
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
 
 print("--- CLUSTER DIAGNOSTIC TABLE ---")
 print(cluster_summary)
@@ -2774,25 +2290,25 @@ df_final <- df_sample %>%
       
       # --- 1. IDENTIFYING NOISE (High Flags or Impossible Radii) ---
       # Cluster 6 fits here (High NoTrans + Radius > 25)
-      Pct_NoTrans > 0.40 | Med_Radius > 25 ~ "Instrumental Noise / Artifacts",
+      Pct_NoTrans > 0.40 | Med_Radius > 25 ~ "High non-transit flag / very large fitted radius",
       
       # Cluster 4 fits here (High Eclipse flag + Radius > 20)
-      Pct_Eclipse > 0.40 | Med_Radius > 20 ~ "Eclipsing Binaries (False Positives)",
+      Pct_Eclipse > 0.40 | Med_Radius > 20 ~ "High eclipse flag / large fitted radius",
       
       # Cluster 3 fits here (Moderate Eclipse flag + Short Period)
-      Pct_Eclipse > 0.30 & Med_Period < 3 ~ "Contact Binaries / Hot Jupiter FPs",
+      Pct_Eclipse > 0.30 & Med_Period < 3 ~ "Short periods with elevated eclipse flags",
 
       # --- 2. IDENTIFYING PLANETS (Clean Candidates) ---
       
       # Cluster 2 fits here (Small Radius + Low Insolation relative to others)
       # We call it "Warm" instead of "Habitable" to be scientifically safe (Insol ~23)
-      Med_Radius < 2.5 & Med_Insol < 50 ~ "Warm Super-Earths (Best Candidates)",
+      Med_Radius < 2.5 & Med_Insol < 50 ~ "Smaller radius / lower insolation",
       
       # Cluster 5 fits here (High Insolation + Radius ~2.5)
-      Med_Insol > 1500 ~ "Scorched Sub-Neptunes (Lava Worlds)",
+      Med_Insol > 1500 ~ "High insolation",
       
       # Clusters 1 and 7 fit here (The standard population)
-      TRUE ~ "Hot Super-Earths & Sub-Neptunes"
+      TRUE ~ "Other radius / insolation profiles"
     )
   )
 
@@ -2813,17 +2329,17 @@ p_final <- ggplot(df_final, aes(x = period_days, y = radius_earth, color = Clust
   # B. Reference Lines (Physical Boundaries)
   # Line at 4 Earth Radii (Gas Giant limit)
   geom_hline(yintercept = log10(4+1), linetype = "dashed", color = "gray30") +
-  annotate("text", x = 0, y = log10(4+1)+0.05, label = "Gas Giant Limit (4 Re)", 
+  annotate("text", x = 0, y = log10(4+1)+0.05, label = "Descriptive radius threshold (4 Re)",
            size = 3, color = "gray30", hjust = 0) +
   
   # C. Colors and Scales
   scale_color_brewer(palette = "Dark2") + # High contrast palette
   
   labs(
-    title = "Final Classification of Kepler Objects",
-    subtitle = "Identified sub-populations based on RelMS Clustering (k=7)",
-    x = "Orbital Period [Log10 Days]",
-    y = "Planetary Radius [Log10 Earth Radii]",
+    title = "Descriptive Cluster Profiles of Kepler Objects",
+    subtitle = "Heuristic profiles from fitted properties and flags (k=7)",
+    x = "Orbital Period [log10(days + 1)]",
+    y = "Planetary Radius [log10(Earth radii + 1)]",
     color = "Object Type"
   ) +
   theme_minimal() +
@@ -2853,35 +2369,6 @@ print(final_stats)
 
 
 # ==============================================================================
-# FINAL INTERPRETATION AND ASTROPHYSICAL INSIGHTS
-# ==============================================================================
-# 
-# 1. SEGREGATION OF NOISE AND ARTIFACTS:
-#    The unsupervised clustering (k=7) successfully disentangled non-planetary 
-#    signals from the dataset without relying on the official labels:
-#    - Instrumental Artifacts (Cluster 6): Defined by physically impossible 
-#      radii (>30 Earth Radii) and a high prevalence of 'Not-Transit-Like' flags.
-#    - Eclipsing Binaries (Cluster 4): Characterized by stellar-sized radii 
-#      (>20 Earth Radii) and a 68% probability of secondary eclipses.
-#    - Contact Binaries/FPs (Cluster 3): Detected via short orbital periods 
-#      and moderate eclipse probabilities.
-#
-# 2. TAXONOMY OF PLANETARY CANDIDATES:
-#    Among the clean clusters (low error flags), the model revealed a distinct 
-#    astrophysical hierarchy based on thermal and physical properties:
-#    - Warm Super-Earths (Cluster 2): This is the most scientifically significant 
-#      group. It contains small planets (~1.75 Re) with the lowest insolation 
-#      levels (23.6x Earth flux), making them the best candidates for 
-#      potential habitability studies in this sample.
-#    - Scorched Worlds (Cluster 5): A distinct group of sub-Neptunes receiving 
-#      extreme energy (>1500x Earth flux), likely representing stripped 
-#      planetary cores.
-#    - Hot Super-Earths (Clusters 1 & 7): The dominant population, representing 
-#      the typical close-in, rocky planets found by the Kepler mission.
-#
-# 3. METHODOLOGICAL CONCLUSION:
-#    The RelMS metric proved superior to standard methods. By integrating 
-#    binary quality flags with continuous physical variables, the algorithm 
-#    simultaneously cleaned the data (isolating noise) and classified the 
-#    planets (separating Warm vs. Scorched), a nuance that a simple binary 
-#    model (k=2) failed to capture.
+# INTERPRETATION LIMITS
+# The chosen k=7 profiles reuse flags and input-derived labels. They do not
+# validate noise removal, composition, habitability or method superiority.

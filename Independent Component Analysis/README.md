@@ -1,404 +1,101 @@
 # Image Segmentation with Fisher Projection Pursuit and Orthogonal Projections
 
-## Overview
+[Portfolio](../README.md) · [Execution guide](../RUNNING.md)
 
-This repository contains two complementary R projects that implement **Fisher
-projection pursuit** and **orthogonal projections** on a dermatological image.
-They seek directions whose one-dimensional projections are bimodal according to
-the Fisher Index; they do not estimate statistically independent components or
-provide a clinical melanoma classifier.
+Two R implementations explore unsupervised colour partitions in a whitened RGB image. They search for projections that separate two k-means clusters according to a Fisher index, then construct an orthogonal basis.
 
-The primary goal is to explore unsupervised colour partitions in a whitened RGB
-space. Interpreting a partition as lesion versus skin requires annotated masks
-and external validation, neither of which is included here.
+The folder retains its original name, `Independent Component Analysis`, and the scripts label projections `IC1`, `IC2` and `IC3`. These labels refer to orthogonal projections: the algorithm does not establish statistical independence or provide a clinical melanoma classifier.
 
----
+## Files and implementations
 
-## Project 1: Sequential Implementation (`First_Approach.R`)
+| File | Purpose |
+| :--- | :--- |
+| [First_Approach.R](First_Approach.R) | Sequential search, projection histograms, cluster maps and an interactive Fisher-index surface |
+| [Second_Approach.R](Second_Approach.R) | Reusable parallel search function and full-resolution projection images |
+| [Melanoma.jpg](Melanoma.jpg) | The RGB input used by both examples |
 
-### Description
+| Setting | Sequential example | Parallel example |
+| :--- | :--- | :--- |
+| Pixels analyzed | Every fourth row and column: 43,621 pixels | Full image: 694,564 pixels |
+| First-direction grid | 64,800 angle pairs | 64,800 angle pairs |
+| Second-direction grid | 360 angles in the orthogonal plane | 360 angles in the orthogonal plane |
+| k-means restarts during search | 10 | 5 by default |
+| k-means iteration limit during search | 40 | 25 by default |
+| Worker processes | 1 | 2 by default |
 
-The first project implements a straightforward, loop-based approach to discover optimal projection directions. It serves as the foundational implementation and is ideal for understanding the core concepts.
+These examples use different image resolutions and k-means settings, so their runtimes are not a controlled parallel-speedup comparison. Full-resolution searches can take hours; each worker needs its own working data. Reduce `workers` to limit memory use and use matching inputs and settings for timing comparisons.
 
-### Key Features
+## Method
 
-- **Image Processing**: Reads and visualizes melanoma images in full resolution
-- **Data Whitening**: Transforms RGB data to zero mean with identity covariance matrix using eigendecomposition
-- **Sequential Search**: Uses explicit for-loops to exhaustively test 64,800 projection directions on a 3D sphere (360° × 180° in spherical coordinates)
-- **Fisher Index Optimization**: Evaluates each projection direction by:
-  - Projecting whitened data onto the direction vector
-  - Clustering projected 1D data into two groups using k-means
-  - Computing the Fisher Index: $FI = \frac{(\mu_1 - \mu_2)^2}{\sigma_1^2 + \sigma_2^2}$
-- **Orthogonal Projection Discovery**: Sequentially finds two orthogonal
-  Fisher-optimal directions and their orthogonal complement
-- **Visualization**: Generates histograms, segmentation masks, grayscale projections, and 3D optimization surfaces
+1. Read the image and preserve the correspondence between each pixel and its RGB channels.
+2. Center the three-channel matrix and whiten it using its covariance eigendecomposition.
+3. Search a one-degree spherical grid for the direction with the largest observed Fisher index.
+4. Search a one-degree circle in the perpendicular plane for the second direction.
+5. Obtain the third direction from the normalized cross product and reshape the projected pixels into images.
 
-### Workflow
+### Whitening
 
-1. **Load and Subsample Image**: Reads melanoma image and subsamples (1 out of every 4 pixels) for faster computation
-2. **Whiten Data**: Converts RGB channels to a matrix and applies whitening transformation
-3. **Find IC1**: Searches entire sphere to find the projection maximizing the Fisher Index
-4. **Find IC2**: Searches only the orthogonal circle to find the best perpendicular projection
-5. **Find IC3**: Calculates as the cross product of IC1 and IC2
-6. **Output**: Binary segmentation masks and grayscale projection images
+For pixel matrix $X$, channel means $\mu$ and covariance decomposition $EDE^\top$, the whitened matrix is
 
-### Main Functions/Sections
+$$
+Z = (X - \mu)ED^{-1/2}.
+$$
 
-```r
-# Core operations:
-readImage()              # Load melanoma image
-scale()                  # Center data
-eigen()                  # Eigendecomposition for whitening
-kmeans()                 # Cluster projected data
-pracma::cross()          # Calculate orthogonal vectors
+Its sample covariance is the identity up to numerical precision. Both scripts reject singular or ill-conditioned RGB covariance before inversion.
+
+### Fisher index and search
+
+For projection $p = Zv$, two-cluster k-means supplies means $\bar p_1,\bar p_2$ and sample variances $s_1^2,s_2^2$. The search evaluates
+
+$$
+FI = \frac{(\bar p_1 - \bar p_2)^2}{s_1^2 + s_2^2 + 10^{-10}}.
+$$
+
+The spherical directions are $v(\theta,\phi) = (\cos\theta\sin\phi,\sin\theta\sin\phi,\cos\phi)$, with integer degree values $\theta=1,\ldots,360$ and $\phi=1,\ldots,180$. This grid is finite and not uniform in surface area; it includes repeated pole directions and sign-equivalent axes. The selected maximum is over the tested grid and fitted k-means partitions, not all possible continuous directions or partitions.
+
+The second search uses $v(\alpha)=\cos\alpha\,b_1+\sin\alpha\,b_2$, where $b_1,b_2$ span the plane perpendicular to the first direction. Orthogonality after whitening gives uncorrelated projection scores, which does not imply independence or clinically meaningful clusters. A high Fisher index measures separation of the fitted clusters; it is not a formal test of bimodality.
+
+## Running the examples
+
+Use the [shared R environment](../RUNNING.md), tested with R 4.5.3. Required packages are `OpenImageR`, `pracma`, `plotly`, `foreach` and `doParallel`. Start in this project directory with the image present:
+
+```bash
+Rscript First_Approach.R
+Rscript Second_Approach.R
 ```
 
-### Expected Output
+The first script runs its complete example. Running the second with `Rscript` executes its example; sourcing it defines the function without launching the full search.
 
-- Histograms of each projection showing bimodal distributions
-- Binary segmentation maps distinguishing melanoma from skin
-- 3D surface plot of the Fisher Index optimization landscape
-- Grayscale representations of each orthogonal projection
-
-### Performance Considerations
-
-- **Computation Time**: Approximately 10-30 minutes (depending on hardware)
-- **Memory Usage**: Moderate; subsampling reduces pixel count significantly
-- **Best Use**: Educational purposes, algorithm understanding, and prototyping
-
----
-
-## Project 2: Parallel Implementation (`Second_Approach.R`)
-
-### Description
-
-The second project encapsulates the algorithm within a single, reusable function that implements **parallel computing** to dramatically accelerate the optimization process. It processes full-resolution images without subsampling and includes configurable k-means parameters.
-
-### Key Features
-
-- **Parallelized IC1 Search**: Distributes the 64,800 direction tests across multiple CPU cores using `foreach` and `doParallel`
-- **Full Resolution Processing**: No subsampling required; operates on complete image data
-- **Reusable Function**: Self-contained function with clear parameter interface
-- **Automatic Library Management**: Automatically installs and loads required packages
-- **Configurable k-means**: Adjustable `nstart` and `niter` parameters (defaults: 5 and 25)
-- **Vectorized Output**: Returns a 3D array containing all three orthogonal projections
-
-### Function Signature
+For a custom RGB image, use this R example:
 
 ```r
-findOptimalProjections(image_path, nstart_kmeans = 5, niter_kmeans = 25)
-```
-
-**Parameters:**
-- `image_path`: String path to the input image (e.g., "Melanoma.jpg")
-- `nstart_kmeans`: Number of random initializations for k-means (default: 5)
-- `niter_kmeans`: Maximum iterations for k-means algorithm (default: 25)
-
-**Returns:**
-- 3D array of dimensions (height, width, 3), where each layer contains the grayscale projection for IC1, IC2, and IC3
-
-### Workflow
-
-1. **Initialize**: Set up parallel backend using all available cores minus one
-2. **Load and Prepare**: Read full-resolution image and store original dimensions
-3. **Whiten Data**: Apply identical whitening transformation as Project 1
-4. **Parallel IC1 Search**: Distribute 64,800 projection evaluations across cores using `%dopar%`
-5. **Sequential IC2 Search**: Search orthogonal circle (much faster, remains sequential)
-6. **Calculate IC3**: Determine using cross product
-7. **Generate Outputs**: Project whitened data onto all three directions and reshape to images
-8. **Return**: 3D array containing all projection images
-
-### Main Libraries Used
-
-```r
-library(OpenImageR)    # Image I/O and processing
-library(foreach)       # Parallel loop framework
-library(doParallel)    # Parallel backend registration
-library(pracma)        # Cross product for vector algebra
-```
-
-### Expected Performance
-
-- **Speedup**: 4-8× faster than sequential version (depending on CPU cores)
-- **Computation Time**: 2-5 minutes on typical modern hardware (8-core processor)
-- **Memory Usage**: Higher due to parallel cluster creation, but manageable
-- **Scalability**: Linear speedup with additional CPU cores (up to practical limits)
-
-### Usage Example
-
-```r
-# Load the function
 source("Second_Approach.R")
+projections <- findOptimalProjections(
+  image_path = "Melanoma.jpg",
+  nstart_kmeans = 5,
+  niter_kmeans = 25,
+  workers = 2L,
+  seed = 42L
+)
 
-# Process the melanoma image
-projections <- findOptimalProjections("Melanoma.jpg", nstart_kmeans = 10, niter_kmeans = 30)
-
-# Visualize the results
 par(mfrow = c(1, 3), mar = c(1, 1, 3, 1))
-image(projections[,,1], main = "IC1", col = grey.colors(256))
-image(projections[,,2], main = "IC2", col = grey.colors(256))
-image(projections[,,3], main = "IC3", col = grey.colors(256))
+for (component in 1:3) {
+  image(
+    t(projections[dim(projections)[1]:1, , component]),
+    main = paste("Projection", component),
+    col = grey.colors(256), axes = FALSE,
+    asp = dim(projections)[1] / dim(projections)[2]
+  )
+}
 par(mfrow = c(1, 1))
 ```
 
----
+The returned array has dimensions `(height, width, 3)`. The parallel function derives a seed for each grid direction, making the first search independent of worker scheduling. Package versions and floating-point behavior can still affect results.
 
-## Mathematical Background
+## Interpretation and verification
 
-### Data Whitening
+Projection images describe colour contrast. Binary maps in the sequential example come from two-cluster k-means; neither cluster is identified as lesion or skin without annotated masks and external validation. The source and clinical label of `Melanoma.jpg` are unverified; its file hash is recorded in the [data manifest](../data-manifest.json).
 
-Whitening transforms centered data $X$ such that the resulting matrix $Z$ has an identity covariance matrix:
+The review checked pixel/channel alignment, finite outputs, orthogonality, reconstruction dimensions and whitening. The sequential example completed in full. The parallel full-resolution search completed, but its final reconstruction and plotting stage was recovered and verified separately; the [audit note](../AUDIT.md#límites-concretos-de-la-comprobación) records the exact qualification.
 
-$$Z = (X - \mu) \cdot W$$
-
-where $W = E \cdot D^{-1/2}$, with $E$ being the eigenvectors and $D$ the eigenvalues of $\text{Cov}(X)$.
-
-### Fisher Index
-
-For a 1D projection $p = Z \cdot v$ clustered into two groups, the Fisher Index measures class separability:
-
-$$FI = \frac{(\bar{p}_1 - \bar{p}_2)^2}{\sigma_1^2 + \sigma_2^2 + \epsilon}$$
-
-Higher values indicate better separation between clusters.
-
-### Spherical Coordinates
-
-Projection directions in 3D are parameterized using spherical coordinates:
-
-- **Azimuthal angle (θ)**: 0° to 360°
-- **Polar angle (φ)**: 0° to 180°
-- **Unit vector**: $v(\theta, \phi) = [\cos(\theta)\sin(\phi), \sin(\theta)\sin(\phi), \cos(\phi)]$
-
-### Orthogonal Constraints
-
-After finding IC1, IC2 is constrained to lie on the circle orthogonal to IC1:
-
-$$v = \cos(\alpha) \cdot v_1 + \sin(\alpha) \cdot v_2$$
-
-where $v_1, v_2$ form an orthonormal basis for the plane perpendicular to IC1.
-
----
-
-## Comparison: Sequential vs. Parallel
-
-| Aspect | Project 1 (Sequential) | Project 2 (Parallel) |
-|--------|----------------------|----------------------|
-| **Image Processing** | Subsampled | Full resolution |
-| **Computation** | for-loops | foreach %dopar% |
-| **Speed** | ~15-30 minutes | ~2-5 minutes |
-| **Scalability** | Limited | Excellent |
-| **Complexity** | Simple, educational | Advanced, production-ready |
-| **Parameters** | Hardcoded | Flexible function parameters |
-| **Memory Usage** | Lower | Higher (cluster overhead) |
-| **Code Length** | ~150 lines | ~200 lines (with comments) |
-
----
-
-## File Structure
-
-```
-.
-├── First_Approach.R       # Sequential implementation (educational)
-├── Second_Approach.R      # Parallel implementation (production)
-├── Melanoma.jpg           # Input dermatological image
-└── README.md              # This file
-```
-
----
-
-## Installation & Requirements
-
-### Required R Packages
-
-```r
-# Install if not already installed
-packages <- c("OpenImageR", "foreach", "doParallel", "pracma", "Rfast", "plotly")
-for (pkg in packages) {
-  if (!require(pkg, character.only = TRUE)) {
-    install.packages(pkg)
-  }
-}
-
-# Load packages
-library(OpenImageR)
-library(foreach)
-library(doParallel)
-library(pracma)
-library(Rfast)
-library(plotly)
-```
-
-### System Requirements
-
-- **R Version**: 3.6.0 or higher
-- **OS**: Windows, macOS, or Linux
-- **Processor**: Multi-core CPU recommended for parallel version
-- **RAM**: Minimum 4 GB, 8 GB recommended
-- **Disk Space**: ~500 MB for dependencies
-
----
-
-## How to Use
-
-### Running Project 1 (Sequential)
-
-```r
-# Ensure Melanoma.jpg is in your working directory
-# or update the readImage() path accordingly
-
-# Source and run the script
-source("First_Approach.R")
-
-# The script automatically:
-# 1. Loads the melanoma image
-# 2. Performs whitening
-# 3. Finds optimal projections
-# 4. Generates visualizations
-```
-
-### Running Project 2 (Parallel)
-
-```r
-# Ensure Melanoma.jpg is in your working directory
-# or update the image_path parameter accordingly
-
-# Source the function definition
-source("Second_Approach.R")
-
-# The script automatically calls the function with the example image.
-# To use with a different image or parameters, call:
-results <- findOptimalProjections("Melanoma.jpg", nstart_kmeans = 10, niter_kmeans = 30)
-
-# Access individual projections
-ic1 <- results[,,1]
-ic2 <- results[,,2]
-ic3 <- results[,,3]
-
-# Visualize
-image(ic1, main = "First Independent Component", col = grey.colors(256))
-```
-
----
-
-## Output Interpretation
-
-### Projection Images
-
-Each of the three orthogonal projections reveals different colour-contrast
-structures in the image:
-
-- **Projection 1**: The strongest bimodal colour projection in this image
-- **IC2**: Captures secondary structural variations orthogonal to IC1
-- **IC3**: Orthogonal complement, completes the 3D basis
-
-### Fisher Index Surface
-
-The 3D surface plot (Project 1) shows how the Fisher Index varies across all spherical coordinates, with peaks indicating optimal projection directions.
-
-### Segmentation Masks
-
-Binary masks show the result of unsupervised k-means clustering on each
-projection. Cluster labels do not have clinical meaning without ground truth.
-
----
-
-## Algorithm Complexity Analysis
-
-### Computational Complexity
-
-- **IC1 Search**: O(n_directions × n_pixels × n_kmeans_iterations)
-  - n_directions = 64,800 (360 × 180)
-  - n_pixels ≈ 76,800-307,200 (depending on resolution)
-  - n_kmeans_iterations = 40 (default in Project 1)
-
-- **IC2 Search**: O(n_angles × n_pixels × n_kmeans_iterations)
-  - n_angles = 360 (only circular search)
-  - Much faster than IC1 search
-
-- **IC3 Calculation**: O(1) (cross product only)
-
-### Parallelization Efficiency
-
-With $p$ cores, the IC1 search speedup is approximately:
-
-$$\text{Speedup} \approx p \times (1 - f)$$
-
-where $f$ is the fraction of non-parallelizable code (typically 5-10%).
-
----
-
-## Troubleshooting
-
-### Issue: Image Not Found
-
-**Solution**: Ensure `Melanoma.jpg` is in the current working directory. You can check your working directory with:
-
-```r
-getwd()
-
-# Set the correct working directory
-setwd("~/path/to/your/project")
-```
-
-### Issue: Package Installation Fails
-
-**Solution**: Use alternative installation method or update R:
-
-```r
-# Try alternative repository
-options(repos=c(CRAN="http://cran.r-project.org"))
-install.packages("package_name")
-
-# Or update packages
-update.packages()
-```
-
-### Issue: Parallel Version Still Running After 10 Minutes
-
-**Solution**: This is normal for full-resolution images. Monitor progress with your system's resource monitor (Task Manager on Windows, Activity Monitor on macOS).
-
-### Issue: Memory Error on Large Images
-
-**Solution**: Use the sequential version with subsampling, or increase available RAM. You can also reduce `nstart_kmeans` to lower memory consumption.
-
----
-
-## Future Enhancements
-
-1. **GPU Acceleration**: Implement CUDA/OpenCL for even faster computation
-2. **Algorithm Variations**: Explore different independence measures (negentropy, kurtosis)
-3. **Multi-class Segmentation**: Extend to more than two categories
-4. **Cross-validation**: Implement training/testing split for robustness assessment
-5. **Visualization Dashboard**: Create interactive Shiny application for real-time parameter tuning
-
----
-
-## References
-
-- Hyvärinen, A., & Oja, E. (2000). Independent Component Analysis: Algorithms and Applications. *Neural Networks*, 13(4-5), 411-430.
-- ISIC Archive: https://www.isic-archive.com/ (Dermatological image dataset source)
-- R Documentation: https://www.r-project.org/
-
----
-
-## Author
-
-**Alejandro Treny Ortega**
-
-UC3M - Master's in Statistics for Data Science
-
----
-
-## License
-
-This project is provided as-is for educational purposes. Feel free to modify and distribute according to your institution's guidelines.
-
----
-
-## Notes
-
-- Both projects process the same melanoma image using different computational strategies
-- The parallel version is recommended for production use and large-scale applications
-- Results can vary slightly due to k-means random initialization; set seeds for reproducibility
-- For optimal segmentation quality, consider tuning k-means parameters via the `nstart_kmeans` and `niter_kmeans` arguments
-- Ensure the image file is in the same directory as your R scripts, or provide the full path to the image
+**Author:** Alejandro Treny Ortega · UC3M, Master's in Statistics for Data Science

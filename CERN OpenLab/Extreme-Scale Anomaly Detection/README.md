@@ -1,12 +1,14 @@
-# The Silicon Neuron: Extreme-Scale Anomaly Detection on FPGAs
+# The Silicon Neuron: Anomaly Detection and Weight Quantization
 
-![Python](https://img.shields.io/badge/python-3.10%2B-blue) ![TensorFlow](https://img.shields.io/badge/tensorflow-2.16%2B-orange) ![Status](https://img.shields.io/badge/status-research_prototype-blue)
+[Portfolio](../../README.md) · [Execution guide](../../RUNNING.md) · [Notebook](notebook.ipynb)
+
+![Python](https://img.shields.io/badge/python-3.12-blue) ![TensorFlow](https://img.shields.io/badge/tensorflow-2.16%2B-orange) ![Status](https://img.shields.io/badge/status-research_prototype-blue)
 
 > **Context:** A research prototype that explores an autoencoder and low-precision arithmetic on simulated jet data. It is not a validated Level-1 Trigger implementation.
 
 ## Executive Summary
 
-The HL-LHC upgrade will increase collision rates to **40 MHz**, generating over **1 Petabyte of data per second**. Standard hardware triggers rely on hard-coded physics rules, potentially discarding evidence of unforeseen physics (Dark Matter, Long-Lived Particles).
+LHC bunch crossings occur at up to 40 MHz. The CMS Phase-2 trigger design specifies a Level-1 accept rate up to 750 kHz, a 12.5 microsecond latency budget and an HLT output around 7.5 kHz ([CMS trigger design](https://cds.cern.ch/record/2759072)). These are system design figures, not measurements of this notebook.
 
 This project implements a **Deep Autoencoder** and a custom TensorFlow quantization experiment. The notebook is useful for studying the trade-off between reconstruction quality and reduced precision; FPGA synthesis, resource use, timing and physics performance must be measured independently before making deployment claims.
 
@@ -14,17 +16,15 @@ This project implements a **Deep Autoencoder** and a custom TensorFlow quantizat
 
 ## The Physics Challenge
 
-At the LHC, we cannot save every collision. We must filter 40,000,000 events down to \~1,000 per second. 
-* **The Bottleneck:** The Level-1 Trigger (FPGA-based) has $< 1 \mu s$ to decide whether to keep an event.
-* **The Strategy:** Train an unsupervised Autoencoder on Standard Model background (QCD jets). Events with high reconstruction error are flagged as "Anomalies."
+The experiment trains an autoencoder on a synthetic background and uses reconstruction error as an anomaly score. Its inputs and cuts are a teaching example; it does not model a complete detector trigger.
 
 ### Simulation (Monte Carlo)
 
 The notebook uses a deliberately simplified simulated sample:
-* **Background:** QCD Dijets modeled with diffuse radiation patterns.
-* **Signal:** Boosted $W'$ bosons decaying into collimated 3-prong substructures.
+* **Background:** Diffuse synthetic point clouds inspired by jet constituents.
+* **Signal:** Synthetic three-prong point clouds; no boson decay or parton-shower generator is used.
 
-![Jet Visualization](jet_viz.png) *(Left: Diffuse QCD Background. Right: Structured Signal Anomaly)*
+![Jet Visualization](jet_viz.png) *(Diffuse synthetic background and structured synthetic signal.)*
 
 ------------------------------------------------------------------------
 
@@ -33,19 +33,19 @@ The notebook uses a deliberately simplified simulated sample:
 ### 1. Data Pipeline
 
 -   **Input:** Raw particle kinematics ($p_T, \eta, \phi$).
--   **Preprocessing:** Top-50 particle selection, Log-normalization, and Standard Scaling ($z$-score).
+-   **Preprocessing:** Top-50 selection by transverse momentum, log transformation of $p_T$, then scaling fitted only on training background. Validation and test events are separated before fitting preprocessing.
 
 ### 2. The Model (Autoencoder)
 
 -   **Architecture:** Compressive bottleneck ($150 \to 8$ dimensions).
 -   **Objective:** Minimize Mean Squared Error (MSE) on background events.
 
-### 3. Custom Quantization Engine (The Core Innovation)
+### 3. Custom Quantization Layer
 
-Standard libraries (like QKeras) often face compatibility issues with modern TensorFlow. I implemented a custom **`QuantizedDense` Layer** from first principles using the **Straight-Through Estimator (STE)**. 
-* **Precision:** 6-bit Fixed Point (`ap_fixed<6,1>`).
-* **Range:** $[-32, 31]$ integer mapping.
-* **Constraint:** Zero-dependency implementation.
+The custom **`QuantizedDense` layer** implements weight and bias quantization in TensorFlow using a **straight-through estimator (STE)**.
+* **Precision:** Six-bit weights/biases in hidden layers and eight-bit weights/biases in the output layer.
+* **Range:** Six-bit integer codes are clipped to $[-32,31]$ and divided by 32; the final layer uses $[-128,127]/128$.
+* **Scope:** Rounding uses a straight-through gradient estimator. Activations, accumulation and training remain floating point; TensorFlow is required.
 
 ### 4. Firmware Export Prototype
 
@@ -55,17 +55,17 @@ The project includes an experimental Python-to-C++ exporter for a `parameters.h`
 
 ## Validation status
 
-The figures in this repository are exploratory notebook outputs, not reproducible hardware benchmarks. In particular, the original comparison did not include a synthesis report, a target FPGA, fixed-point equivalence tests, a held-out physics sample, or uncertainty estimates. The only claims this repository supports are that the notebook defines a quantized-model experiment and an export prototype.
+The executed held-out toy-data evaluation gives baseline **AUC 0.9619** and weight-quantized **AUC 0.9606**. The ROC below is the baseline result; the quantized evaluation is printed separately in the notebook. These values do not establish real-physics sensitivity, firmware equivalence, hardware compression or latency.
 
-![ROC Curve](roc_curve.png) *(Archived exploratory plot. It must be regenerated on a held-out sample and paired with synthesis results before it is used as a performance claim.)*
+![Baseline ROC on held-out synthetic events](roc_curve.png)
 
 ------------------------------------------------------------------------
 
-## Future Roadmap (CERN)
+## Further validation
 
-If integrated into the CERN computing infrastructure, the following steps are proposed: 
+Possible extensions, each requiring separate evaluation:
 1. **Hardware-in-the-Loop:** Compile and synthesize the exported design for a named target, then record timing, DSP/BRAM/LUT use, power and numerical equivalence.
-2. **Pruning:** Implement unstructured pruning to reduce DSP usage by an estimated 40%.
+2. **Pruning:** Evaluate pruning and measure its actual resource and accuracy effects.
 3. **Graph Neural Networks:** Adapt the quantization engine for GNNs to better capture the non-Euclidean geometry of particle detectors.
 
 ------------------------------------------------------------------------
@@ -73,3 +73,7 @@ If integrated into the CERN computing infrastructure, the following steps are pr
 ## Author
 
 **Alejandro Treny Ortega**
+
+## Reproduction
+
+Use the shared [Python environment](../../RUNNING.md), then execute [notebook.ipynb](notebook.ipynb) from this folder. Synthetic inputs and model exports are generated locally.
